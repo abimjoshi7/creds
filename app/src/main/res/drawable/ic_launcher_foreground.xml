@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Shield body. Content stays inside the 72dp adaptive-icon safe zone. -->
+    <path
+        android:fillColor="#7FD1C1"
+        android:pathData="M54,25 L79,35.5 L79,56 C79,70.5 68.5,81.5 54,87 C39.5,81.5 29,70.5 29,56 L29,35.5 Z" />
+
+    <!-- Keyhole cut, drawn in the background colour so it reads as negative space. -->
+    <path
+        android:fillColor="#101418"
+        android:pathData="M54,45 m-6.5,0 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0 Z" />
+    <path
+        android:fillColor="#101418"
+        android:pathData="M50.5,52 L57.5,52 L59.5,69 L48.5,69 Z" />
+</vector>
