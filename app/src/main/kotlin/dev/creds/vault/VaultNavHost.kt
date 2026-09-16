@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import dev.creds.vault.items.ItemEditorRoute
 import dev.creds.vault.items.VaultListRoute
 import dev.creds.vault.tags.ManageTagsRoute
 import kotlinx.serialization.Serializable
@@ -14,6 +15,12 @@ data object VaultListDestination
 
 @Serializable
 data object ManageTagsDestination
+
+@Serializable
+data class ItemDestination(
+    val uuid: String? = null,
+    val templateId: String? = null,
+)
 
 /**
  * Navigation inside an unlocked vault.
@@ -37,11 +44,23 @@ fun VaultNavHost(
         composable<VaultListDestination> {
             VaultListRoute(
                 onManageTags = { navController.navigate(ManageTagsDestination) { launchSingleTop = true } },
+                onOpenItem = { uuid ->
+                    navController.navigate(ItemDestination(uuid = uuid)) { launchSingleTop = true }
+                },
+                onCreateItem = { template ->
+                    navController.navigate(ItemDestination(templateId = template.id))
+                },
                 onLock = onLock,
             )
         }
         composable<ManageTagsDestination> {
             ManageTagsRoute(onBack = { navController.popBackStack() })
+        }
+        composable<ItemDestination> {
+            ItemEditorRoute(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() },
+            )
         }
     }
 }

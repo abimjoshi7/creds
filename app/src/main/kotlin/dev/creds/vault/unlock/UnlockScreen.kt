@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -87,10 +88,21 @@ fun UnlockScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
     ) {
-        Text("Unlock Creds", style = MaterialTheme.typography.headlineMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Creds",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                "Enter your master password to open the vault.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         PasswordField(
             value = state.password,
@@ -118,12 +130,18 @@ fun UnlockScreen(
             Text(
                 "Too many attempts. Try again in ${state.lockedOutSeconds}s.",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         Button(
             onClick = onSubmit,
             enabled = state.canSubmit,
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(UnlockTags.SUBMIT),
@@ -132,6 +150,7 @@ fun UnlockScreen(
                 CircularProgressIndicator(
                     modifier = Modifier.padding(end = 8.dp),
                     strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Text("Unlocking…")
             } else {
@@ -143,6 +162,7 @@ fun UnlockScreen(
             OutlinedButton(
                 onClick = onBiometric,
                 enabled = !state.busy,
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UnlockTags.BIOMETRIC),

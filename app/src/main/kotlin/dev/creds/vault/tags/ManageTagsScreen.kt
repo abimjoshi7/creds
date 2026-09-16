@@ -20,16 +20,18 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,22 +107,26 @@ fun ManageTagsScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Tags") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAdd,
-                icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                text = { Text("New tag") },
-                modifier = Modifier.testTag(ManageTagsTags.ADD),
+                actions = {
+                    IconButton(
+                        onClick = onAdd,
+                        modifier = Modifier.testTag(ManageTagsTags.ADD),
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = "New tag")
+                    }
+                },
             )
         },
     ) { padding ->
@@ -138,8 +144,8 @@ fun ManageTagsScreen(
             ) {
                 Text("No tags yet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Tags file items however you think about them — work, family, a trip. " +
-                        "An item can carry several.",
+                    "Tags are for filing items once you can open them. " +
+                        "Until then they are optional — work, family, a trip.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -148,19 +154,26 @@ fun ManageTagsScreen(
 
             else -> LazyColumn(
                 modifier = Modifier.padding(padding),
-                // Keeps the last row clear of the floating button.
-                contentPadding = PaddingValues(bottom = 88.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 items(tags, key = Tag::id) { tag ->
                     ListItem(
                         modifier = Modifier
                             .clickable { onEdit(tag) }
                             .testTag(ManageTagsTags.row(tag.id)),
-                        leadingContent = { TagDot(tag.color, size = 16.dp) },
+                        colors = ListItemDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                        ),
+                        leadingContent = { TagDot(tag.color, size = 12.dp) },
                         headlineContent = {
                             Text(tag.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
-                        supportingContent = { Text(itemCount(state.counts[tag.id] ?: 0)) },
+                        supportingContent = {
+                            Text(
+                                itemCount(state.counts[tag.id] ?: 0),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
                         trailingContent = {
                             IconButton(
                                 onClick = { confirmDelete = tag },
@@ -169,6 +182,10 @@ fun ManageTagsScreen(
                                 Icon(Icons.Outlined.Delete, contentDescription = "Delete ${tag.name}")
                             }
                         },
+                    )
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
             }
@@ -215,6 +232,7 @@ private fun TagEditorDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(if (editor.isNew) "New tag" else "Edit tag") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -223,6 +241,7 @@ private fun TagEditorDialog(
                     onValueChange = onNameChange,
                     label = { Text("Name") },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
                     isError = editor.error != null,
                     supportingText = {
                         val length = TagNames.normalize(editor.name).let { it.codePointCount(0, it.length) }

@@ -5,7 +5,6 @@ import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -101,12 +100,12 @@ class MainActivity : FragmentActivity() {
                             modifier = content,
                         )
 
-                        // Not padded: the vault screens draw their own top bars, which
-                        // apply the status bar inset themselves.
+                        // Vault screens own TopAppBars; they must see status-bar insets.
+                        // Consuming without also padding made the bars draw under the clock.
                         RootState.Unlocked -> VaultNavHost(
                             navController = navController,
                             onLock = root::lock,
-                            modifier = Modifier.consumeWindowInsets(insets),
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }

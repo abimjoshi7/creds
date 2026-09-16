@@ -8,11 +8,13 @@ import dev.creds.vault.core.data.db.CredsDatabase
 import dev.creds.vault.core.data.db.dao.SearchQuery
 import dev.creds.vault.core.data.db.dao.VaultQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
+import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
 import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
+import dev.creds.vault.core.model.FieldHistoryEntry
 import dev.creds.vault.core.model.Tag
 import dev.creds.vault.core.model.VaultCounts
 import dev.creds.vault.core.model.VaultField
@@ -41,25 +43,59 @@ class VaultRepository internal constructor(
 
     private val itemDao = database.itemDao()
     private val fieldDao = database.fieldDao()
+    private val fieldHistoryDao = database.fieldHistoryDao()
     private val tagDao = database.tagDao()
     private val searchDao = database.searchDao()
 
     /**
-     * Inserts or replaces an item and all of its fields.
+     * Inserts or updates an item and its fields.
      *
-     * Fields are replaced wholesale rather than diffed: an edit screen hands back the
-     * finished list, and reconciling per-field identity would be a lot of machinery to
-     * save a few row writes on an object that has a handful of them.
+     * Existing field uids are preserved so field history stays attached. When a
+     * sensitive value changes, the previous ciphertext is recorded before the row is
+     * overwritten — that is the whole point of history ("the new password does not work").
      */
     suspend fun save(vaultKey: VaultKey, item: VaultItem, tags: List<Tag> = item.tags) {
         database.withTransaction {
             itemDao.upsert(item.toEntity(vaultKey))
 
-            fieldDao.deleteForItem(item.uuid)
-            val fields = item.fields
-                .filter { it.type.isValueBearing || it.value.isEmpty() }
-                .map { it.toEntity(vaultKey, item.uuid) }
-            if (fields.isNotEmpty()) fieldDao.insertAll(fields)
+            val existing = fieldDao.forItemAll(item.uuid).associateBy { it.uid }
+            val incoming = item.fields.filter { it.type.isValueBearing || it.value.isEmpty() }
+            val keptUids = mutableSetOf<Long>()
+
+            for (field in incoming) {
+                if (field.uid != 0L) {
+                    keptUids += field.uid
+                    val previous = existing[field.uid]
+                    if (previous != null &&
+                        !previous.deleted &&
+                        previous.sensitive &&
+                        previous.valueEnc != null
+                    ) {
+                        val previousValue = fieldCipher.openValue(
+                            vaultKey,
+                            item.uuid,
+                            previous.type,
+                            previous.valueEnc,
+                        )
+                        if (previousValue.isNotEmpty() && previousValue != field.value) {
+                            fieldHistoryDao.insert(
+                                FieldHistoryEntity(
+                                    fieldUid = field.uid,
+                                    valueEnc = previous.valueEnc,
+                                    replacedAt = item.updatedAt,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                val uid = fieldDao.upsert(field.toEntity(vaultKey, item.uuid))
+                if (field.uid == 0L) keptUids += uid else keptUids += field.uid
+            }
+
+            existing.values
+                .filter { !it.deleted && it.uid !in keptUids }
+                .forEach { fieldDao.markDeleted(it.uid, item.updatedAt) }
 
             tagDao.unlinkAll(item.uuid)
             if (tags.isNotEmpty()) {
@@ -77,6 +113,27 @@ class VaultRepository internal constructor(
         val tags = tagDao.forItem(uuid)
         return entity.toModel(vaultKey, fields, tags)
     }
+
+    /**
+     * Previous values of a field, newest first.
+     *
+     * Empty when the field is new or has never changed. Decryption uses the field's
+     * current type — history is only written for value changes, not type changes.
+     */
+    suspend fun fieldHistory(vaultKey: VaultKey, fieldUid: Long): List<FieldHistoryEntry> {
+        if (fieldUid == 0L) return emptyList()
+        val field = fieldDao.byUid(fieldUid) ?: return emptyList()
+        return fieldHistoryDao.forField(fieldUid).map { entry ->
+            FieldHistoryEntry(
+                id = entry.id,
+                value = fieldCipher.openValue(vaultKey, field.itemUuid, field.type, entry.valueEnc),
+                replacedAt = entry.replacedAt,
+            )
+        }
+    }
+
+    suspend fun fieldHistoryCount(fieldUid: Long): Int =
+        if (fieldUid == 0L) 0 else fieldHistoryDao.countForField(fieldUid)
 
     /**
      * Full-text search.

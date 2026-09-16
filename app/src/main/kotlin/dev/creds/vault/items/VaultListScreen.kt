@@ -15,8 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Archive
@@ -35,17 +36,18 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -57,7 +59,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
+import dev.creds.vault.core.ui.theme.CredsRadiusMedium
+import dev.creds.vault.core.ui.theme.CredsRadiusSmall
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +103,7 @@ object VaultListTags {
     const val LIST = "vault:list"
     const val EMPTY = "vault:empty"
     const val CLEAR_FILTERS = "vault:filters:clear"
+    const val ADD = "vault:add"
 
     fun item(uuid: String) = "vault:item:$uuid"
     fun favorite(uuid: String) = "vault:item:$uuid:favorite"
@@ -135,6 +141,8 @@ data class VaultListActions(
     val onEmptyTrash: () -> Unit = {},
     val onEditTags: (VaultItemSummary) -> Unit = {},
     val onManageTags: () -> Unit = {},
+    val onOpenItem: (VaultItemSummary) -> Unit = {},
+    val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
     val onLock: () -> Unit = {},
 )
@@ -142,6 +150,8 @@ data class VaultListActions(
 @Composable
 fun VaultListRoute(
     onManageTags: () -> Unit,
+    onOpenItem: (String) -> Unit,
+    onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: VaultListViewModel = hiltViewModel(),
@@ -149,6 +159,7 @@ fun VaultListRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var tagging by remember { mutableStateOf<VaultItemSummary?>(null) }
+    var pickingTemplate by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -197,6 +208,8 @@ fun VaultListRoute(
             onEmptyTrash = viewModel::emptyTrash,
             onEditTags = { tagging = it },
             onManageTags = onManageTags,
+            onOpenItem = { onOpenItem(it.uuid) },
+            onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
             onLock = onLock,
         ),
@@ -215,6 +228,16 @@ fun VaultListRoute(
                 tagging = null
             },
             onDismiss = { tagging = null },
+        )
+    }
+
+    if (pickingTemplate) {
+        TemplatePickerDialog(
+            onPick = { template ->
+                pickingTemplate = false
+                onCreateItem(template)
+            },
+            onDismiss = { pickingTemplate = false },
         )
     }
 }
@@ -237,7 +260,9 @@ fun VaultListScreen(
         drawerState = drawerState,
         modifier = modifier,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+            ) {
                 VaultDrawerContent(
                     state = state,
                     onSmartList = {
@@ -259,6 +284,7 @@ fun VaultListScreen(
         },
     ) {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 SearchTopBar(
                     query = state.filter.query,
@@ -272,6 +298,19 @@ fun VaultListScreen(
                     onManageTags = actions.onManageTags,
                     onAddSamples = actions.onAddSamples,
                 )
+            },
+            floatingActionButton = {
+                if (state.filter.smartList != SmartList.TRASH) {
+                    FloatingActionButton(
+                        onClick = actions.onAddItem,
+                        shape = RoundedCornerShape(CredsRadiusMedium),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.testTag(VaultListTags.ADD),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add item")
+                    }
+                }
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { padding ->
@@ -292,7 +331,7 @@ fun VaultListScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag(VaultListTags.LIST),
-                        contentPadding = PaddingValues(bottom = 16.dp),
+                        contentPadding = PaddingValues(bottom = 88.dp),
                     ) {
                         items(items, key = VaultItemSummary::uuid) { item ->
                             ItemRow(
@@ -351,6 +390,9 @@ private fun SearchTopBar(
     var overflow by remember { mutableStateOf(false) }
 
     TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+        ),
         navigationIcon = {
             IconButton(onClick = onOpenDrawer, modifier = Modifier.testTag(VaultListTags.DRAWER_BUTTON)) {
                 Icon(Icons.Filled.Menu, contentDescription = "Open lists and tags")
@@ -379,8 +421,10 @@ private fun SearchTopBar(
                     autoCorrectEnabled = false,
                     imeAction = ImeAction.Search,
                 ),
-                shape = CircleShape,
+                shape = RoundedCornerShape(CredsRadiusMedium),
                 colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
@@ -448,6 +492,10 @@ fun VaultDrawerContent(
 ) {
     val filter = state.filter
     val counts = state.counts
+    val itemColors = NavigationDrawerItemDefaults.colors(
+        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+        unselectedContainerColor = Color.Transparent,
+    )
 
     LazyColumn(contentPadding = PaddingValues(12.dp)) {
         item { DrawerHeading("Creds") }
@@ -459,6 +507,8 @@ fun VaultDrawerContent(
                 badge = { CountBadge(counts.of(list)) },
                 selected = filter.smartList == list,
                 onClick = { onSmartList(list) },
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
                 modifier = Modifier.testTag(VaultListTags.smartList(list)),
             )
         }
@@ -470,7 +520,10 @@ fun VaultDrawerContent(
         }
         if (templates.isNotEmpty()) {
             item {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(
+                    Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
                 DrawerHeading("Types")
             }
             items(templates) { template ->
@@ -480,22 +533,31 @@ fun VaultDrawerContent(
                     badge = { CountBadge(counts.byTemplate[template]) },
                     selected = filter.template == template,
                     onClick = { onTemplate(template) },
+                    colors = itemColors,
+                    shape = RoundedCornerShape(CredsRadiusSmall),
                     modifier = Modifier.testTag(VaultListTags.template(template)),
                 )
             }
         }
 
+        // Tags stay available for filtering samples, but sit below lists/types until
+        // item detail exists and filing them becomes a primary habit.
         item {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                Modifier.padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
             DrawerHeading("Tags")
         }
         items(state.tags, key = Tag::id) { tag ->
             NavigationDrawerItem(
                 label = { Text(tag.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                icon = { TagDot(tag.color, size = 12.dp) },
+                icon = { TagDot(tag.color, size = 10.dp) },
                 badge = { CountBadge(counts.byTag[tag.id] ?: 0) },
                 selected = tag.id in filter.tagIds,
                 onClick = { onTag(tag.id) },
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
                 modifier = Modifier.testTag(VaultListTags.tag(tag.id)),
             )
         }
@@ -505,6 +567,8 @@ fun VaultDrawerContent(
                 icon = { Icon(Icons.Outlined.Tag, contentDescription = null) },
                 selected = false,
                 onClick = onManageTags,
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
             )
         }
     }
@@ -546,7 +610,7 @@ private fun ActiveFilters(state: VaultListUiState, actions: VaultListActions) {
                 FilterChipRemovable(
                     label = filter.smartList.label,
                     key = "list",
-                    leading = { Icon(filter.smartList.icon, null, Modifier.size(InputChipDefaults.IconSize)) },
+                    leading = { Icon(filter.smartList.icon, null, Modifier.size(14.dp)) },
                     onRemove = { actions.onSmartList(SmartList.ALL) },
                 )
             }
@@ -556,7 +620,7 @@ private fun ActiveFilters(state: VaultListUiState, actions: VaultListActions) {
                 FilterChipRemovable(
                     label = TemplateCatalog.displayName(template),
                     key = "template",
-                    leading = { Icon(template.icon, null, Modifier.size(InputChipDefaults.IconSize)) },
+                    leading = { Icon(template.icon, null, Modifier.size(14.dp)) },
                     onRemove = { actions.onTemplate(template) },
                 )
             }
@@ -585,20 +649,32 @@ private fun FilterChipRemovable(
     leading: @Composable () -> Unit,
     onRemove: () -> Unit,
 ) {
-    InputChip(
-        selected = true,
+    Surface(
         onClick = onRemove,
-        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = leading,
-        trailingIcon = {
+        shape = RoundedCornerShape(CredsRadiusSmall),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.testTag(VaultListTags.filterChip(key)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leading()
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Icon(
                 Icons.Outlined.Close,
                 contentDescription = "Remove $label filter",
-                modifier = Modifier.size(InputChipDefaults.IconSize),
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        },
-        modifier = Modifier.testTag(VaultListTags.filterChip(key)),
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -611,14 +687,15 @@ private fun ItemRow(
     var menu by remember { mutableStateOf(false) }
 
     ListItem(
-        // Opening an item is the next checkpoint; until then a tap offers what can be
-        // done to it, which is also where it will keep living on long-press.
         modifier = Modifier
-            .clickable { menu = true }
+            .clickable { actions.onOpenItem(item) }
             .testTag(VaultListTags.item(item.uuid)),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.background,
+        ),
         leadingContent = {
             Surface(
-                shape = CircleShape,
+                shape = RoundedCornerShape(CredsRadiusSmall),
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.size(40.dp),
             ) {
@@ -631,19 +708,32 @@ private fun ItemRow(
                 }
             }
         },
-        headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        headlineContent = {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
         supportingContent = if (item.subtitle.isEmpty() && item.tags.isEmpty()) {
             null
         } else {
             {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (item.subtitle.isNotEmpty()) {
-                        Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            item.subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                     if (item.tags.isNotEmpty()) {
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                             maxLines = 1,
                         ) {
                             item.tags.forEach { TagLabel(it) }
@@ -767,7 +857,7 @@ private fun EmptyState(state: VaultListUiState, actions: VaultListActions) {
     val filter = state.filter
     val (title, body) = when {
         state.counts.total == 0 ->
-            "Your vault is empty" to "Items you add or import will appear here."
+            "Your vault is empty" to "Tap + to add a login, card, note, or anything else."
         filter.query.isNotBlank() ->
             "No matches for “${filter.query.trim()}”" to
                 "Search covers titles, usernames, websites and notes. Passwords and other secrets are never searchable."
@@ -802,6 +892,7 @@ private fun EmptyState(state: VaultListUiState, actions: VaultListActions) {
             TextButton(onClick = actions.onResetFilters) { Text("Show all items") }
         }
         if (state.counts.total == 0) {
+            TextButton(onClick = actions.onAddItem) { Text("Add item") }
             actions.onAddSamples?.let { TextButton(onClick = it) { Text("Add sample items (debug)") } }
         }
     }
@@ -817,6 +908,7 @@ fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {

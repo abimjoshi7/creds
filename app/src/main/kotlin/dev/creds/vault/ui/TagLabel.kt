@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.creds.vault.core.model.Tag
+import dev.creds.vault.core.ui.theme.CredsRadiusSmall
 
 /**
  * The colours a tag can take.
@@ -28,10 +29,10 @@ import dev.creds.vault.core.model.Tag
  */
 object TagPalette {
     val colors: List<Int> = listOf(
-        0xFF1F6F63, // teal
+        0xFF1A6B63, // teal
         0xFF3B6FB6, // blue
-        0xFF7B4FB0, // violet
-        0xFFB0457B, // magenta
+        0xFF6B5B95, // muted violet
+        0xFF9A4F6E, // rose
         0xFFB3261E, // red
         0xFFC2600B, // orange
         0xFFB08600, // amber
@@ -53,27 +54,22 @@ fun TagDot(color: Int?, modifier: Modifier = Modifier, size: Dp = 8.dp) {
     )
 }
 
-/** A compact, non-interactive tag marker for list rows. */
+/** Compact, non-interactive tag marker — text + dot, no chip chrome. */
 @Composable
 fun TagLabel(tag: Tag, modifier: Modifier = Modifier) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier,
+    Row(
+        modifier = modifier.padding(end = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TagDot(tag.color, size = 6.dp)
-            Text(
-                tag.name,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        TagDot(tag.color, size = 5.dp)
+        Text(
+            tag.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -84,12 +80,13 @@ fun ColorSwatch(
     selected: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val ring = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
+    val shape = RoundedCornerShape(CredsRadiusSmall)
+    val ring = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant
     Box(
         modifier
             .size(32.dp)
-            .border(2.dp, ring, CircleShape)
-            .padding(4.dp)
-            .background(tagColor(color), CircleShape),
+            .border(1.5.dp, ring, shape)
+            .padding(5.dp)
+            .background(tagColor(color), shape),
     )
 }

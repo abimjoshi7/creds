@@ -4,12 +4,16 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-// Brand: a desaturated teal that reads as "secure" without the banking-app navy cliché,
-// on a warm neutral ground so long lists of credentials do not feel clinical.
-private val Teal40 = Color(0xFF1F6F63)
-private val Teal80 = Color(0xFF7FD1C1)
-private val Sand99 = Color(0xFFFBF9F7)
-private val Ink10 = Color(0xFF101418)
+// Cool stone + ink. Deliberately not Material tonal, not warm cream, not banking navy.
+private val Ink = Color(0xFF0E1419)
+private val Mist = Color(0xFFF3F5F7)
+private val Paper = Color(0xFFFAFBFC)
+private val Slate = Color(0xFF5A6570)
+private val Accent = Color(0xFF1A6B63)
+private val AccentSoft = Color(0xFF7EC8BE)
+private val SurfaceRaised = Color(0xFFFFFFFF)
+private val SurfaceDark = Color(0xFF141A20)
+private val MistDark = Color(0xFF0C1014)
 
 // Audit severity ramp. Kept out of the Material scheme so a theme change can never
 // make "breached" and "strong" hard to tell apart.
@@ -19,23 +23,53 @@ val SeverityMedium = Color(0xFFB08600)
 val SeverityOk = Color(0xFF2E7D5B)
 
 internal val LightScheme = lightColorScheme(
-    primary = Teal40,
+    primary = Accent,
     onPrimary = Color.White,
-    secondary = Color(0xFF4A635E),
-    background = Sand99,
-    surface = Sand99,
-    onBackground = Ink10,
-    onSurface = Ink10,
+    primaryContainer = Color(0xFFD8EDE9),
+    onPrimaryContainer = Color(0xFF0A3D38),
+    secondary = Slate,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE8ECF0),
+    onSecondaryContainer = Ink,
+    tertiary = Color(0xFF4A5D73),
+    background = Mist,
+    onBackground = Ink,
+    surface = Paper,
+    onSurface = Ink,
+    surfaceVariant = Color(0xFFE6EAEE),
+    onSurfaceVariant = Slate,
+    outline = Color(0xFFC5CCD4),
+    outlineVariant = Color(0xFFDDE2E7),
     error = SeverityCritical,
+    surfaceContainerLowest = Paper,
+    surfaceContainerLow = Mist,
+    surfaceContainer = Color(0xFFEEF1F4),
+    surfaceContainerHigh = SurfaceRaised,
+    surfaceContainerHighest = Color(0xFFE8ECF0),
 )
 
 internal val DarkScheme = darkColorScheme(
-    primary = Teal80,
+    primary = AccentSoft,
     onPrimary = Color(0xFF00382F),
-    secondary = Color(0xFFB1CCC6),
-    background = Ink10,
-    surface = Color(0xFF171C21),
-    onBackground = Color(0xFFE1E3E5),
-    onSurface = Color(0xFFE1E3E5),
+    primaryContainer = Color(0xFF0F4A44),
+    onPrimaryContainer = AccentSoft,
+    secondary = Color(0xFFA8B4BF),
+    onSecondary = MistDark,
+    secondaryContainer = Color(0xFF2A323A),
+    onSecondaryContainer = Color(0xFFD5DCE3),
+    tertiary = Color(0xFF9BB0C7),
+    background = MistDark,
+    onBackground = Color(0xFFE4E8EC),
+    surface = SurfaceDark,
+    onSurface = Color(0xFFE4E8EC),
+    surfaceVariant = Color(0xFF232A32),
+    onSurfaceVariant = Color(0xFFA8B4BF),
+    outline = Color(0xFF3D4650),
+    outlineVariant = Color(0xFF2A323A),
     error = Color(0xFFFFB4AB),
+    surfaceContainerLowest = MistDark,
+    surfaceContainerLow = SurfaceDark,
+    surfaceContainer = Color(0xFF1A2128),
+    surfaceContainerHigh = Color(0xFF232A32),
+    surfaceContainerHighest = Color(0xFF2A323A),
 )

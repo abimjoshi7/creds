@@ -75,3 +75,10 @@ data class Tag(
     val name: String,
     val color: Int? = null,
 )
+
+/** A previous value of a field, decrypted for display. Newest first from the repository. */
+data class FieldHistoryEntry(
+    val id: Long,
+    val value: String,
+    val replacedAt: Long,
+)

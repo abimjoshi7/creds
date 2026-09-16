@@ -138,11 +138,18 @@ internal interface FieldDao {
     @Query("SELECT * FROM fields WHERE item_uuid = :itemUuid AND deleted = 0 ORDER BY ord ASC")
     suspend fun forItem(itemUuid: String): List<FieldEntity>
 
+    /** Includes soft-deleted rows — used when saving so history and uids stay stable. */
+    @Query("SELECT * FROM fields WHERE item_uuid = :itemUuid")
+    suspend fun forItemAll(itemUuid: String): List<FieldEntity>
+
     @Query("SELECT * FROM fields WHERE item_uuid IN (:itemUuids) AND deleted = 0 ORDER BY ord ASC")
     suspend fun forItems(itemUuids: List<String>): List<FieldEntity>
 
     @Query("SELECT * FROM fields WHERE uid = :uid")
     suspend fun byUid(uid: Long): FieldEntity?
+
+    @Query("UPDATE fields SET deleted = 1, updated_at = :now WHERE uid = :uid")
+    suspend fun markDeleted(uid: Long, now: Long)
 
     /**
      * Reuse detection: fingerprints shared by more than one item.
@@ -182,6 +189,9 @@ internal interface FieldHistoryDao {
 
     @Query("SELECT * FROM field_history WHERE field_uid = :fieldUid ORDER BY replaced_at DESC")
     suspend fun forField(fieldUid: Long): List<FieldHistoryEntity>
+
+    @Query("SELECT COUNT(*) FROM field_history WHERE field_uid = :fieldUid")
+    suspend fun countForField(fieldUid: Long): Int
 
     @Query("DELETE FROM field_history WHERE field_uid = :fieldUid")
     suspend fun deleteForField(fieldUid: Long)

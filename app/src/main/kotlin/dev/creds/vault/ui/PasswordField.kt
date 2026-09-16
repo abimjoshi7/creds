@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +64,7 @@ fun PasswordField(
         singleLine = true,
         enabled = enabled,
         isError = isError,
+        shape = MaterialTheme.shapes.medium,
         textStyle = if (revealed) SecretTextStyle else LocalTextStyle.current,
         visualTransformation = if (revealed) {
             VisualTransformation.None

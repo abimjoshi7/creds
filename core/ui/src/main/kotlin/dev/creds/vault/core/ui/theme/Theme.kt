@@ -28,6 +28,7 @@ fun CredsTheme(
     MaterialTheme(
         colorScheme = scheme,
         typography = CredsTypography,
+        shapes = CredsShapes,
         content = content,
     )
 }

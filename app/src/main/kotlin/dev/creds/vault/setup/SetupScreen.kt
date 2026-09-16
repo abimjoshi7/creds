@@ -2,13 +2,14 @@ package dev.creds.vault.setup
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.creds.vault.core.domain.strength.StrengthBand
+import dev.creds.vault.core.ui.components.QuietPanel
 import dev.creds.vault.core.ui.theme.SeverityCritical
 import dev.creds.vault.core.ui.theme.SeverityHigh
 import dev.creds.vault.core.ui.theme.SeverityMedium
@@ -87,23 +89,34 @@ fun SetupScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text("Create your vault", style = MaterialTheme.typography.headlineMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Creds",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text("Create your vault", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Local, encrypted, offline. Your master password never leaves this device.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         // Stated plainly and up front, because it is the single most important fact about
         // this app and the worst possible moment to learn it is after a lockout.
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("There is no password reset", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Your master password is the only way in. It is never sent anywhere " +
-                        "and is not stored on this device, so nobody — including us — can " +
-                        "recover your vault if you forget it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+        QuietPanel {
+            Text("There is no password reset", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Your master password is the only way in. It is never sent anywhere " +
+                    "and is not stored on this device, so nobody — including us — can " +
+                    "recover your vault if you forget it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         PasswordField(
@@ -137,14 +150,24 @@ fun SetupScreen(
         )
 
         if (biometricAvailable) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Unlock with biometrics", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Adds a second way in, protected by this device's secure hardware. " +
-                            "Enrolling a new fingerprint disables it.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+            QuietPanel {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f).padding(end = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Unlock with biometrics", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Adds a second way in, protected by this device's secure hardware. " +
+                                "Enrolling a new fingerprint disables it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Switch(checked = state.enableBiometric, onCheckedChange = onBiometricToggle)
                 }
             }
@@ -161,6 +184,11 @@ fun SetupScreen(
         Button(
             onClick = onSubmit,
             enabled = state.canSubmit,
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(SetupTags.SUBMIT),
@@ -171,6 +199,7 @@ fun SetupScreen(
                 CircularProgressIndicator(
                     modifier = Modifier.padding(end = 8.dp),
                     strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Text("Deriving key…")
             } else {
@@ -190,12 +219,13 @@ private fun StrengthMeter(
     val color = band.color()
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalAlignment = Alignment.Start,
     ) {
         LinearProgressIndicator(
             progress = { band.fraction() },
             color = color,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(

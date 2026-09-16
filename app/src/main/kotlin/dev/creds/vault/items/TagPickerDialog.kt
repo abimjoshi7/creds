@@ -80,13 +80,15 @@ fun TagPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text("Tags for “$itemTitle”", maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (allTags.isEmpty()) {
                     Text(
-                        "No tags yet. Tags are yours to define — work, family, a project.",
+                        "No tags yet. Useful once you can open and file items.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 LazyColumn(Modifier.heightIn(max = 280.dp)) {
@@ -121,6 +123,7 @@ fun TagPickerDialog(
                     },
                     label = { Text("New tag") },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
                     isError = error != null,
                     supportingText = error?.let { { Text(it) } },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
