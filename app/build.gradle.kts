@@ -17,7 +17,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Substitutes a plain Application for CredsApplication, so UI tests do not boot
+        // Hilt and the lock coordinator's background work just to render a composable.
+        testInstrumentationRunner = "dev.creds.vault.CredsTestRunner"
     }
 
     buildTypes {
@@ -69,6 +71,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.biometric)
+    // BiometricPrompt only accepts a FragmentActivity or Fragment, so MainActivity
+    // extends FragmentActivity. Declared directly rather than inherited through
+    // biometric, so bumping that dependency cannot remove our superclass.
+    implementation(libs.androidx.fragment)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.hilt.android)
@@ -78,7 +84,19 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertk)
     testRuntimeOnly(libs.junit.platform.launcher)
+
     androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    // The BOM is inherited through :core:ui for the main source set, but androidTest
+    // needs its own platform declaration to version these.
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    // Supplies the empty activity createComposeRule() launches into. It must be on the
+    // androidTest configuration, not just debugImplementation: for an application module
+    // the instrumentation APK is a separate package (dev.creds.vault.test), and the rule
+    // resolves the host activity there rather than in the app under test.
+    androidTestImplementation(libs.compose.ui.test.manifest)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 
 tasks.withType<Test>().configureEach { useJUnitPlatform() }

@@ -13,6 +13,10 @@ android {
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
         consumerProguardFiles("consumer-rules.pro")
+
+        // The schema test exercises SQLCipher's native library and SQLite's FTS5 module,
+        // neither of which exists in a host JVM. It runs on a device.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -59,6 +63,17 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertk)
     testRuntimeOnly(libs.junit.platform.launcher)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    // argon2kt is an implementation dependency inside :core:crypto, so it does not reach
+    // this module transitively. The key-store round-trip test needs the real hasher —
+    // substituting a fake one here would skip the exact combination that failed in
+    // production: real Argon2id output sealed, persisted, read back, and reopened.
+    androidTestImplementation(libs.argon2kt)
+    // Declared explicitly rather than relying on androidTestImplementation extending
+    // implementation: the schema test calls runBlocking directly.
+    androidTestImplementation(libs.kotlinx.coroutines.android)
 }
 
 tasks.withType<Test>().configureEach { useJUnitPlatform() }

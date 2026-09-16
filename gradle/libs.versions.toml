@@ -21,6 +21,10 @@ hiltNavigationCompose = "1.4.0"
 room = "2.8.4"
 datastore = "1.2.1"
 biometric = "1.1.0"
+# BiometricPrompt only accepts a FragmentActivity, so MainActivity extends one. Declared
+# explicitly rather than leaned on transitively through biometric: a superclass arriving
+# by accident breaks the day that dependency is bumped.
+fragment = "1.9.0"
 
 sqlcipher = "4.18.0"
 argon2kt = "1.6.0"
@@ -35,6 +39,7 @@ junit5 = "6.1.3"
 assertk = "0.28.1"
 robolectric = "4.16.1"
 androidxTestJunit = "1.3.0"
+androidxTestRunner = "1.7.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -44,6 +49,7 @@ androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -53,6 +59,11 @@ compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+# Versionless, like the other Compose entries: the BOM decides. UI tests run in-process,
+# which is the only way to verify screens on a device where FLAG_SECURE blocks
+# screenshots and the OEM blocks uiautomator and input injection.
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
@@ -78,6 +89,8 @@ assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assert
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestJunit" }
+# Supplies AndroidJUnitRunner itself, which androidx.test.ext:junit does not pull in.
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

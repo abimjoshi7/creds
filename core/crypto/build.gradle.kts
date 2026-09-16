@@ -12,6 +12,10 @@ android {
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
         consumerProguardFiles("consumer-rules.pro")
+
+        // argon2kt's native library ships for Android ABIs only, so the Argon2id
+        // known-answer vectors cannot run in a host JVM test. They run on a device.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -45,6 +49,11 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertk)
     testRuntimeOnly(libs.junit.platform.launcher)
+
+    // The Argon2id known-answer vectors need argon2kt's native library, which ships for
+    // Android ABIs only. They run on a device and therefore on JUnit4, not JUnit5.
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 tasks.withType<Test>().configureEach { useJUnitPlatform() }
