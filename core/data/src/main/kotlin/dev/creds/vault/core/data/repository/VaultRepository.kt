@@ -1,17 +1,27 @@
 package dev.creds.vault.core.data.repository
 
 import androidx.room.withTransaction
+import androidx.sqlite.db.SimpleSQLiteQuery
 import dev.creds.vault.core.crypto.VaultKey
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
 import dev.creds.vault.core.data.db.dao.SearchQuery
+import dev.creds.vault.core.data.db.dao.VaultQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
+import dev.creds.vault.core.domain.tag.TagNameCheck
+import dev.creds.vault.core.domain.tag.TagNames
 import dev.creds.vault.core.model.Tag
+import dev.creds.vault.core.model.VaultCounts
 import dev.creds.vault.core.model.VaultField
+import dev.creds.vault.core.model.VaultFilter
 import dev.creds.vault.core.model.VaultItem
+import dev.creds.vault.core.model.VaultItemSummary
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 
 /**
  * The module's write path.
@@ -103,8 +113,133 @@ class VaultRepository internal constructor(
         }
     }
 
-    suspend fun upsertTag(tag: Tag): Long =
-        tagDao.upsert(TagEntity(id = tag.id, name = tag.name, color = tag.color))
+    /**
+     * The vault list for [filter], kept current as the vault changes.
+     *
+     * Decrypts nothing: every column a row needs is plaintext inside the encrypted
+     * database. Tags are resolved in memory from the join table so a rename shows up in
+     * every row without re-running the item query.
+     */
+    fun observeItems(filter: VaultFilter): Flow<List<VaultItemSummary>> {
+        val statement = VaultQuery.build(filter)
+        val items = itemDao.observe(SimpleSQLiteQuery(statement.sql, statement.args.toTypedArray()))
+
+        return combine(items, tagDao.observeAll(), tagDao.observeCrossRefs()) { rows, tags, refs ->
+            val tagsById = tags.associate { it.id to it.toModel() }
+            // Grouped in tag-list order, so each row's tags come out alphabetical.
+            val tagOrder = tags.withIndex().associate { (index, tag) -> tag.id to index }
+            val tagsByItem = refs.groupBy({ it.itemUuid }, { it.tagId })
+
+            rows.map { row ->
+                val itemTags = tagsByItem[row.uuid].orEmpty()
+                    .sortedBy { tagOrder[it] ?: Int.MAX_VALUE }
+                    .mapNotNull(tagsById::get)
+                row.toSummary(itemTags)
+            }
+        }
+    }
+
+    fun observeTags(): Flow<List<Tag>> =
+        tagDao.observeAll().map { tags -> tags.map { it.toModel() } }
+
+    fun observeCounts(): Flow<VaultCounts> = combine(
+        itemDao.observeListCounts(),
+        itemDao.observeTemplateCounts(),
+        tagDao.observeTagCounts(),
+    ) { lists, templates, tags ->
+        VaultCounts(
+            all = lists.active,
+            favorites = lists.favorites,
+            archive = lists.archived,
+            trash = lists.trashed,
+            byTemplate = templates.associate { it.template to it.count },
+            byTag = tags.associate { it.tagId to it.count },
+        )
+    }
+
+    suspend fun setFavorite(uuid: String, favorite: Boolean, now: Long) =
+        itemDao.setFavorite(uuid, favorite, now)
+
+    /** Archived items stay searchable from the archive; only the default views hide them. */
+    suspend fun setArchived(uuid: String, archived: Boolean, now: Long) =
+        itemDao.setArchived(uuid, archived, now)
+
+    /** Hard-deletes everything in the trash, in one transaction. Returns how many. */
+    suspend fun emptyTrash(): Int = database.withTransaction {
+        val uuids = itemDao.trashedUuids()
+        uuids.forEach { uuid ->
+            searchDao.deleteFor(uuid)
+            itemDao.purge(uuid)
+        }
+        uuids.size
+    }
+
+    /**
+     * Creates a tag, or explains why not.
+     *
+     * Names are normalised and compared case-insensitively against every existing tag, so
+     * `#Work` cannot be created next to `work`. The comparison runs in Kotlin rather than
+     * SQL because SQLite's `NOCASE` only folds ASCII.
+     */
+    suspend fun createTag(rawName: String, color: Int? = null): TagResult =
+        database.withTransaction {
+            when (val check = TagNames.check(rawName)) {
+                TagNameCheck.Blank -> TagResult.Blank
+                is TagNameCheck.TooLong -> TagResult.TooLong(check.max)
+                is TagNameCheck.Valid -> {
+                    duplicateOf(check.name, excludingId = null)?.let { return@withTransaction it }
+                    val entity = TagEntity(name = check.name, color = color)
+                    val id = tagDao.insert(entity)
+                    TagResult.Saved(entity.copy(id = id).toModel())
+                }
+            }
+        }
+
+    /** Renames or recolours a tag. Items filed under it are untouched, by design. */
+    suspend fun updateTag(tag: Tag): TagResult = database.withTransaction {
+        when (val check = TagNames.check(tag.name)) {
+            TagNameCheck.Blank -> TagResult.Blank
+            is TagNameCheck.TooLong -> TagResult.TooLong(check.max)
+            is TagNameCheck.Valid -> {
+                if (tagDao.byId(tag.id) == null) return@withTransaction TagResult.NotFound
+                duplicateOf(check.name, excludingId = tag.id)?.let { return@withTransaction it }
+                val entity = TagEntity(id = tag.id, name = check.name, color = tag.color)
+                tagDao.update(entity)
+                TagResult.Saved(entity.toModel())
+            }
+        }
+    }
+
+    /**
+     * Deletes a tag. The items it was on are kept and simply lose the tag.
+     *
+     * Those items are marked updated first, while the join rows still say which ones
+     * they are, so a future sync layer sees the change on each of them.
+     */
+    suspend fun deleteTag(id: Long, now: Long) {
+        database.withTransaction {
+            itemDao.touchTagged(id, now)
+            tagDao.delete(id)
+        }
+    }
+
+    /**
+     * Replaces an item's tags.
+     *
+     * Tags are not part of the FTS content, so this needs no reindex and no vault key.
+     */
+    suspend fun setItemTags(uuid: String, tagIds: Set<Long>, now: Long) {
+        database.withTransaction {
+            tagDao.unlinkAll(uuid)
+            if (tagIds.isNotEmpty()) tagDao.link(tagIds.map { ItemTagCrossRef(uuid, it) })
+            itemDao.touch(uuid, now)
+        }
+    }
+
+    private suspend fun duplicateOf(name: String, excludingId: Long?): TagResult.Duplicate? =
+        tagDao.all()
+            .firstOrNull { it.id != excludingId && TagNames.sameName(it.name, name) }
+            ?.let { TagResult.Duplicate(it.name) }
 
     /**
      * Rewrites this item's row in the FTS index.
@@ -139,6 +274,21 @@ class VaultRepository internal constructor(
                 if (field.value.isNotEmpty()) append(' ').append(field.value)
             }
     }
+
+    private fun TagEntity.toModel() = Tag(id = id, name = name, color = color)
+
+    private fun ItemEntity.toSummary(tags: List<Tag>) = VaultItemSummary(
+        uuid = uuid,
+        template = template,
+        title = title,
+        subtitle = subtitle,
+        icon = icon,
+        favorite = favorite,
+        archived = archived,
+        trashed = trashed,
+        updatedAt = updatedAt,
+        tags = tags,
+    )
 
     private fun VaultItem.toEntity(vaultKey: VaultKey) = ItemEntity(
         uuid = uuid,
@@ -191,7 +341,7 @@ class VaultRepository internal constructor(
         createdAt = createdAt,
         updatedAt = updatedAt,
         fields = fields.map { it.toModel(vaultKey) },
-        tags = tags.map { Tag(id = it.id, name = it.name, color = it.color) },
+        tags = tags.map { it.toModel() },
     )
 
     private fun FieldEntity.toModel(vaultKey: VaultKey) = VaultField(
@@ -205,4 +355,20 @@ class VaultRepository internal constructor(
         updatedAt = updatedAt,
         valueUpdatedAt = valueUpdatedAt,
     )
+}
+
+/** The outcome of creating or editing a tag. */
+sealed interface TagResult {
+
+    data class Saved(val tag: Tag) : TagResult
+
+    data object Blank : TagResult
+
+    data class TooLong(val max: Int) : TagResult
+
+    /** Another tag already has this name, ignoring case; [existing] is its spelling. */
+    data class Duplicate(val existing: String) : TagResult
+
+    /** The tag was deleted while being edited. */
+    data object NotFound : TagResult
 }

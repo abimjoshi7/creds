@@ -66,13 +66,21 @@ internal object SearchQuery {
      * rather than as "match nothing".
      */
     fun sanitize(raw: String): String? {
-        val tokens = raw.trim()
-            .split(Regex("\\s+"))
-            .filter { it.isNotBlank() }
-            .map { it.replace("\"", "\"\"") }
+        val terms = tokens(raw).map { it.replace("\"", "\"\"") }
+        if (terms.isEmpty()) return null
 
-        if (tokens.isEmpty()) return null
-
-        return tokens.joinToString(" ") { "\"$it\"*" }
+        return terms.joinToString(" ") { "\"$it\"*" }
     }
+
+    /**
+     * What a person typed, split into terms worth searching for.
+     *
+     * A token with no letter or digit is dropped. The FTS tokenizer discards punctuation
+     * anyway, so `,` would become an empty phrase that matches nothing — a stray comma
+     * would empty the list instead of being ignored.
+     */
+    fun tokens(raw: String): List<String> =
+        raw.trim()
+            .split(Regex("\\s+"))
+            .filter { token -> token.any(Char::isLetterOrDigit) }
 }

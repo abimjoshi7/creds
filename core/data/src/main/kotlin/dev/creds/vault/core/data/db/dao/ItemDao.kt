@@ -4,10 +4,13 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Upsert
+import androidx.sqlite.db.SupportSQLiteQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
+import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.model.Template
 import kotlinx.coroutines.flow.Flow
 
@@ -34,38 +37,64 @@ internal interface ItemDao {
     @Query("SELECT * FROM items WHERE uuid IN (:uuids)")
     suspend fun byUuids(uuids: List<String>): List<ItemEntity>
 
+    /**
+     * The item list, for any [VaultQuery] combination.
+     *
+     * Observes `item_tags` as well as `items` so that tagging an item re-runs a tag
+     * filter. The FTS table cannot be observed — Room does not know it exists — but it is
+     * only ever written in the same transaction as an `items` row, so an `items`
+     * invalidation always accompanies an index change.
+     */
+    @RawQuery(observedEntities = [ItemEntity::class, ItemTagCrossRef::class])
+    fun observe(query: SupportSQLiteQuery): Flow<List<ItemEntity>>
+
+    @Query("UPDATE items SET favorite = :favorite, updated_at = :now WHERE uuid = :uuid")
+    suspend fun setFavorite(uuid: String, favorite: Boolean, now: Long)
+
+    @Query("UPDATE items SET archived = :archived, updated_at = :now WHERE uuid = :uuid")
+    suspend fun setArchived(uuid: String, archived: Boolean, now: Long)
+
+    /** Marks an item changed without touching its content, e.g. after retagging. */
+    @Query("UPDATE items SET updated_at = :now WHERE uuid = :uuid")
+    suspend fun touch(uuid: String, now: Long)
+
     @Query(
         """
-        SELECT * FROM items
+        UPDATE items SET updated_at = :now
+        WHERE uuid IN (SELECT item_uuid FROM item_tags WHERE tag_id = :tagId)
+        """,
+    )
+    suspend fun touchTagged(tagId: Long, now: Long)
+
+    @Query("SELECT uuid FROM items WHERE trashed = 1")
+    suspend fun trashedUuids(): List<String>
+
+    /**
+     * Drawer counts in one pass.
+     *
+     * `COUNT(CASE ...)` rather than `SUM`, because `SUM` over an empty table is NULL and
+     * a brand-new vault would fail to map.
+     */
+    @Query(
+        """
+        SELECT
+            COUNT(CASE WHEN trashed = 0 AND archived = 0 THEN 1 END) AS active,
+            COUNT(CASE WHEN trashed = 0 AND archived = 0 AND favorite = 1 THEN 1 END) AS favorites,
+            COUNT(CASE WHEN trashed = 0 AND archived = 1 THEN 1 END) AS archived,
+            COUNT(CASE WHEN trashed = 1 THEN 1 END) AS trashed
+        FROM items
+        """,
+    )
+    fun observeListCounts(): Flow<ListCounts>
+
+    @Query(
+        """
+        SELECT template, COUNT(*) AS count FROM items
         WHERE trashed = 0 AND archived = 0
-        ORDER BY title COLLATE NOCASE ASC
+        GROUP BY template
         """,
     )
-    fun observeActive(): Flow<List<ItemEntity>>
-
-    @Query(
-        """
-        SELECT * FROM items
-        WHERE trashed = 0 AND archived = 0 AND favorite = 1
-        ORDER BY title COLLATE NOCASE ASC
-        """,
-    )
-    fun observeFavorites(): Flow<List<ItemEntity>>
-
-    @Query("SELECT * FROM items WHERE trashed = 1 ORDER BY updated_at DESC")
-    fun observeTrash(): Flow<List<ItemEntity>>
-
-    @Query("SELECT * FROM items WHERE archived = 1 ORDER BY title COLLATE NOCASE ASC")
-    fun observeArchive(): Flow<List<ItemEntity>>
-
-    @Query(
-        """
-        SELECT * FROM items
-        WHERE trashed = 0 AND archived = 0 AND template = :template
-        ORDER BY title COLLATE NOCASE ASC
-        """,
-    )
-    fun observeByTemplate(template: Template): Flow<List<ItemEntity>>
+    fun observeTemplateCounts(): Flow<List<TemplateCount>>
 
     /** Soft delete. The row stays so a sync layer can propagate the tombstone. */
     @Query("UPDATE items SET trashed = 1, updated_at = :now WHERE uuid = :uuid")
@@ -81,6 +110,18 @@ internal interface ItemDao {
     @Query("SELECT COUNT(*) FROM items WHERE trashed = 0")
     suspend fun countActive(): Int
 }
+
+internal data class ListCounts(
+    val active: Int,
+    val favorites: Int,
+    val archived: Int,
+    val trashed: Int,
+)
+
+internal data class TemplateCount(
+    val template: Template,
+    val count: Int,
+)
 
 @Dao
 internal interface FieldDao {

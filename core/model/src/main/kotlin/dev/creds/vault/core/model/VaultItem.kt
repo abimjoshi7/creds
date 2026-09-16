@@ -31,6 +31,26 @@ data class VaultItem(
 }
 
 /**
+ * An item as a list row sees it.
+ *
+ * Built entirely from columns that are plaintext inside the encrypted database, so
+ * rendering the vault list decrypts nothing. Anything that needs a field value loads the
+ * full [VaultItem].
+ */
+data class VaultItemSummary(
+    val uuid: String,
+    val template: Template,
+    val title: String,
+    val subtitle: String = "",
+    val icon: String? = null,
+    val favorite: Boolean = false,
+    val archived: Boolean = false,
+    val trashed: Boolean = false,
+    val updatedAt: Long = 0L,
+    val tags: List<Tag> = emptyList(),
+)
+
+/**
  * One field of an item.
  *
  * [value] is plaintext and therefore short-lived. Callers that hold a sensitive value

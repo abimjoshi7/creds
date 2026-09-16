@@ -14,6 +14,9 @@ import dev.creds.vault.core.data.prefs.VaultKeyStore
 import dev.creds.vault.core.data.repository.VaultRepository
 import dev.creds.vault.core.domain.lock.UnlockBackoff
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import javax.crypto.Cipher
 
@@ -46,8 +49,20 @@ class VaultManager internal constructor(
 
     val isUnlocked: Boolean get() = session.isUnlocked
 
+    @Volatile
     private var database: CredsDatabase? = null
-    private var repository: VaultRepository? = null
+
+    private val _repository = MutableStateFlow<VaultRepository?>(null)
+
+    /**
+     * The open repository, or null while locked.
+     *
+     * Screens observe this rather than [state]. The session reports "unlocked" a moment
+     * before the database has finished opening, so a screen keyed off [state] can ask for
+     * a repository that does not exist yet; this only becomes non-null once it does, and
+     * becomes null again *before* the database is closed.
+     */
+    val repository: StateFlow<VaultRepository?> = _repository.asStateFlow()
 
     /** Whether setup has run. Decides between the setup and unlock screens at launch. */
     suspend fun isInitialised(): Boolean = keyStore.isInitialised()
@@ -148,10 +163,16 @@ class VaultManager internal constructor(
      * the user's own button — can fire more than once and in any order.
      */
     fun lock() {
-        repository = null
+        // Order matters. Observers learn the vault is locked first, then the key is
+        // zeroed, and only then does the database close under any query still in flight.
+        // A query failing against a closed database is then distinguishable from a real
+        // error: by the time it fails, the repository it came from is no longer current.
+        // Closing after the wipe is safe because the SQLCipher passphrase is a separate
+        // array derived at open time.
+        _repository.value = null
+        session.lock()
         database?.close()
         database = null
-        session.lock()
     }
 
     /**
@@ -162,16 +183,32 @@ class VaultManager internal constructor(
      * a locked one.
      */
     fun requireRepository(): VaultRepository =
-        repository ?: error("Vault is locked")
+        _repository.value ?: error("Vault is locked")
+
+    /**
+     * Runs [block] against the open vault, or returns null when it is locked.
+     *
+     * For user actions — a tap that arrives just after an idle lock is ordinary, not a
+     * bug. The key handed to [block] is live only while the vault stays unlocked; if a
+     * lock lands mid-operation, deriving from it throws rather than using zeroed bytes.
+     */
+    suspend fun <R> withUnlocked(block: suspend (VaultRepository, VaultKey) -> R): R? {
+        val repository = _repository.value ?: return null
+        val unlocked = session.state.value as? VaultState.Unlocked ?: return null
+        return block(repository, unlocked.vaultKey)
+    }
 
     private fun openWith(vaultKey: VaultKey) {
         // Take ownership before opening: if the database throws, the session still holds
         // the key and lock() will wipe it, rather than it being stranded unreferenced.
         session.unlock(vaultKey)
 
+        // Closes a database left over from a previous unlock rather than leaking it.
+        database?.close()
+
         val opened = databaseFactory.open(vaultKey)
         database = opened
-        repository = VaultRepository(opened, FieldCipher())
+        _repository.value = VaultRepository(opened, FieldCipher())
     }
 
     private suspend fun recordFailure(now: Long): UnlockResult {

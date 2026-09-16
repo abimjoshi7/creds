@@ -57,4 +57,16 @@ class SearchQueryTest {
         assertThat(SearchQuery.sanitize("")).isNull()
         assertThat(SearchQuery.sanitize("   ")).isNull()
     }
+
+    @Test
+    fun `punctuation-only input yields no filter`() {
+        // FTS5 would tokenise "," to nothing and match no rows, emptying the list.
+        assertThat(SearchQuery.sanitize(",")).isNull()
+        assertThat(SearchQuery.sanitize(" - . ")).isNull()
+    }
+
+    @Test
+    fun `punctuation-only tokens are dropped from a real query`() {
+        assertThat(SearchQuery.sanitize("- bank")).isEqualTo("\"bank\"*")
+    }
 }

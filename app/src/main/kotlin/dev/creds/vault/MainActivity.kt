@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -16,9 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import dev.creds.vault.core.ui.theme.CredsTheme
-import dev.creds.vault.home.VaultHomeScreen
 import dev.creds.vault.lock.BiometricAuthenticator
 import dev.creds.vault.lock.LockCoordinator
 import dev.creds.vault.setup.SetupRoute
@@ -63,6 +64,9 @@ class MainActivity : FragmentActivity() {
 
                 LaunchedEffect(policy.secureFlag) { setSecure(policy.secureFlag) }
 
+                // Hoisted above the lock switch: see VaultNavHost.
+                val navController = rememberNavController()
+
                 val authenticator = remember { BiometricAuthenticator(this@MainActivity) }
                 val biometricAvailable = remember {
                     BiometricAuthenticator.isAvailable(this@MainActivity)
@@ -97,9 +101,12 @@ class MainActivity : FragmentActivity() {
                             modifier = content,
                         )
 
-                        RootState.Unlocked -> VaultHomeScreen(
+                        // Not padded: the vault screens draw their own top bars, which
+                        // apply the status bar inset themselves.
+                        RootState.Unlocked -> VaultNavHost(
+                            navController = navController,
                             onLock = root::lock,
-                            modifier = content,
+                            modifier = Modifier.consumeWindowInsets(insets),
                         )
                     }
                 }

@@ -256,3 +256,13 @@ Raise any of these and they change.
 - No crash reporting and no analytics SDK of any kind
 - `backup.json` is treated as live credential data: never logged, never printed,
   never copied outside this directory
+- Selecting several tags narrows with AND, like every other filter dimension
+- Recently used, Weak, Reused and Breached smart lists are hidden until the data behind
+  them exists (checkpoints 6 and 8); the query builder refuses them rather than guessing
+- Trashed items leave the FTS index, so the trash is searched by title and subtitle only
+- Tag names are trimmed, lose a leading `#`, cap at 32 code points, and are unique
+  ignoring case (Unicode case folding, not SQLite's ASCII-only `NOCASE`)
+- A list or card subtitle is only ever drawn from non-sensitive fields: it is plaintext
+  in the database and indexed, so "•••• 1234" is deliberately not offered
+- Debug builds carry an "Add sample items" action with invented data; release builds
+  compile a stub
