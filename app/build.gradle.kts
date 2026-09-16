@@ -24,8 +24,24 @@ android {
         testInstrumentationRunner = "dev.creds.vault.CredsTestRunner"
     }
 
+    // Release signing comes from Gradle properties, normally ~/.gradle/gradle.properties, so
+    // neither the keystore nor its password is ever in the repository. Without them the
+    // release build is simply unsigned.
+    val releaseStore = providers.gradleProperty("CREDS_RELEASE_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = providers.gradleProperty("CREDS_RELEASE_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("CREDS_RELEASE_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("CREDS_RELEASE_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
