@@ -61,6 +61,14 @@ class VaultKey(key: ByteArray) : AutoCloseable {
     fun reuseHmacKey(): ByteArray = derive(INFO_REUSE, KEY_BYTES)
 
     /**
+     * Key for the generator's recent-values list.
+     *
+     * Those values belong to no item, so they cannot use a field key; a domain of their
+     * own keeps them unrelated to every item's key as well.
+     */
+    fun generatorHistoryKey(): ByteArray = derive(INFO_GENERATOR, AesGcm.KEY_BYTES)
+
+    /**
      * Copy of the raw key, for sealing under a master, biometric, or recovery key.
      *
      * The caller owns the copy and must wipe it. Nothing outside this module's sealing
@@ -90,6 +98,7 @@ class VaultKey(key: ByteArray) : AutoCloseable {
         private val INFO_DATABASE = "db".toByteArray(StandardCharsets.UTF_8)
         private val INFO_FIELD = "field".toByteArray(StandardCharsets.UTF_8)
         private val INFO_REUSE = "reuse".toByteArray(StandardCharsets.UTF_8)
+        private val INFO_GENERATOR = "generator".toByteArray(StandardCharsets.UTF_8)
 
         /** Generates a new vault key. Called exactly once per vault, at setup. */
         fun generate(): VaultKey {

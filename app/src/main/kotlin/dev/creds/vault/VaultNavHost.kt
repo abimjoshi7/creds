@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import dev.creds.vault.generator.GeneratorRoute
 import dev.creds.vault.items.ItemDetailRoute
 import dev.creds.vault.items.ItemEditorRoute
 import dev.creds.vault.items.VaultListRoute
@@ -17,6 +18,9 @@ data object VaultListDestination
 
 @Serializable
 data object ManageTagsDestination
+
+@Serializable
+data object GeneratorDestination
 
 @Serializable
 data class ItemDetailDestination(val uuid: String)
@@ -50,6 +54,7 @@ fun VaultNavHost(
         composable<VaultListDestination> {
             VaultListRoute(
                 onManageTags = { navController.navigate(ManageTagsDestination) { launchSingleTop = true } },
+                onOpenGenerator = { navController.navigate(GeneratorDestination) { launchSingleTop = true } },
                 onOpenItem = { uuid ->
                     navController.navigate(ItemDetailDestination(uuid)) { launchSingleTop = true }
                 },
@@ -61,6 +66,9 @@ fun VaultNavHost(
         }
         composable<ManageTagsDestination> {
             ManageTagsRoute(onBack = { navController.popBackStack() })
+        }
+        composable<GeneratorDestination> {
+            GeneratorRoute(onBack = { navController.popBackStack() })
         }
         composable<ItemDetailDestination> {
             ItemDetailRoute(

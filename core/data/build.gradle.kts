@@ -19,6 +19,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // MigrationTestHelper reads the exported schemas as test assets.
+    sourceSets {
+        getByName("androidTest") {
+            assets.directories.add("$projectDir/schemas")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -74,6 +81,7 @@ dependencies {
     // Declared explicitly rather than relying on androidTestImplementation extending
     // implementation: the schema test calls runBlocking directly.
     androidTestImplementation(libs.kotlinx.coroutines.android)
+    androidTestImplementation(libs.androidx.room.testing)
 }
 
 tasks.withType<Test>().configureEach { useJUnitPlatform() }

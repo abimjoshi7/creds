@@ -52,6 +52,17 @@ internal class FieldCipher @Inject constructor() {
         }
     }
 
+    /** Seals a generated value. Its own key and AAD, so it can never pass for a field. */
+    fun sealGenerated(vaultKey: VaultKey, value: String): ByteArray =
+        vaultKey.generatorHistoryKey().useAndWipe { key ->
+            AesGcm.seal(key, value.toByteArray(Charsets.UTF_8), generatorAad())
+        }
+
+    fun openGenerated(vaultKey: VaultKey, sealed: ByteArray): String =
+        vaultKey.generatorHistoryKey().useAndWipe { key ->
+            AesGcm.open(key, sealed, generatorAad()).decodeToString()
+        }
+
     /**
      * What goes in `search_text`.
      *
@@ -102,6 +113,8 @@ internal class FieldCipher @Inject constructor() {
 
     private fun aad(itemUuid: String, type: FieldType): ByteArray =
         "$itemUuid|${type.id}".toByteArray(Charsets.UTF_8)
+
+    private fun generatorAad(): ByteArray = "generator".toByteArray(Charsets.UTF_8)
 
     private fun noteAad(itemUuid: String): ByteArray =
         "$itemUuid|note".toByteArray(Charsets.UTF_8)

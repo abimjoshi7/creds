@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
@@ -141,6 +142,7 @@ data class VaultListActions(
     val onEmptyTrash: () -> Unit = {},
     val onEditTags: (VaultItemSummary) -> Unit = {},
     val onManageTags: () -> Unit = {},
+    val onOpenGenerator: () -> Unit = {},
     val onOpenItem: (VaultItemSummary) -> Unit = {},
     val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
@@ -150,6 +152,7 @@ data class VaultListActions(
 @Composable
 fun VaultListRoute(
     onManageTags: () -> Unit,
+    onOpenGenerator: () -> Unit,
     onOpenItem: (String) -> Unit,
     onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
@@ -208,6 +211,7 @@ fun VaultListRoute(
             onEmptyTrash = viewModel::emptyTrash,
             onEditTags = { tagging = it },
             onManageTags = onManageTags,
+            onOpenGenerator = onOpenGenerator,
             onOpenItem = { onOpenItem(it.uuid) },
             onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
@@ -296,6 +300,7 @@ fun VaultListScreen(
                     canEmptyTrash = state.counts.trash > 0,
                     onEmptyTrash = { confirmEmptyTrash = true },
                     onManageTags = actions.onManageTags,
+                    onOpenGenerator = actions.onOpenGenerator,
                     onAddSamples = actions.onAddSamples,
                 )
             },
@@ -385,6 +390,7 @@ private fun SearchTopBar(
     canEmptyTrash: Boolean,
     onEmptyTrash: () -> Unit,
     onManageTags: () -> Unit,
+    onOpenGenerator: () -> Unit,
     onAddSamples: (() -> Unit)?,
 ) {
     var overflow by remember { mutableStateOf(false) }
@@ -459,6 +465,15 @@ private fun SearchTopBar(
                             },
                         )
                     }
+                    DropdownMenuItem(
+                        text = { Text("Password generator") },
+                        modifier = Modifier.testTag(VaultListTags.menu("generator")),
+                        leadingIcon = { Icon(Icons.Outlined.Password, null) },
+                        onClick = {
+                            overflow = false
+                            onOpenGenerator()
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text("Manage tags") },
                         leadingIcon = { Icon(Icons.Outlined.Tag, null) },

@@ -1,5 +1,6 @@
 package dev.creds.vault.core.data.db
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
@@ -8,12 +9,14 @@ import dev.creds.vault.core.data.db.dao.AssociationDao
 import dev.creds.vault.core.data.db.dao.AuditDao
 import dev.creds.vault.core.data.db.dao.FieldDao
 import dev.creds.vault.core.data.db.dao.FieldHistoryDao
+import dev.creds.vault.core.data.db.dao.GeneratorHistoryDao
 import dev.creds.vault.core.data.db.dao.ItemDao
 import dev.creds.vault.core.data.db.dao.SearchDao
 import dev.creds.vault.core.data.db.dao.TagDao
 import dev.creds.vault.core.data.db.entity.AuditScoreEntity
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
+import dev.creds.vault.core.data.db.entity.GeneratedValueEntity
 import dev.creds.vault.core.data.db.entity.ItemAssociationEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
@@ -38,9 +41,15 @@ import dev.creds.vault.core.data.db.entity.TagEntity
         ItemTagCrossRef::class,
         ItemAssociationEntity::class,
         AuditScoreEntity::class,
+        GeneratedValueEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
+    autoMigrations = [
+        // 2: generator_history. A new table only, which Room can derive from the two
+        // exported schemas; nothing existing is touched.
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 @TypeConverters(Converters::class)
 internal abstract class CredsDatabase : RoomDatabase() {
@@ -52,6 +61,7 @@ internal abstract class CredsDatabase : RoomDatabase() {
     abstract fun searchDao(): SearchDao
     abstract fun auditDao(): AuditDao
     abstract fun associationDao(): AssociationDao
+    abstract fun generatorHistoryDao(): GeneratorHistoryDao
 
     companion object {
         const val NAME: String = "creds.db"

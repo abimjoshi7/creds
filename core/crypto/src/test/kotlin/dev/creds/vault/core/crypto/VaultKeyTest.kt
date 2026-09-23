@@ -33,7 +33,7 @@ class VaultKeyTest {
     }
 
     @Test
-    fun `the three domains are independent`() {
+    fun `the key domains are independent`() {
         val vaultKey = key()
 
         val db = vaultKey.databasePassphrase().hex()
@@ -42,9 +42,14 @@ class VaultKeyTest {
 
         // Domain separation is the whole reason for the info strings. If any two of
         // these collide, compromising one subsystem compromises the others.
+        val generator = vaultKey.generatorHistoryKey().hex()
+
         assertThat(db).isNotEqualTo(field)
         assertThat(db).isNotEqualTo(reuse)
         assertThat(field).isNotEqualTo(reuse)
+        assertThat(generator).isNotEqualTo(db)
+        assertThat(generator).isNotEqualTo(field)
+        assertThat(generator).isNotEqualTo(reuse)
     }
 
     @Test

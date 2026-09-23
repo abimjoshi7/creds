@@ -9,12 +9,14 @@ import dev.creds.vault.core.data.db.dao.SearchQuery
 import dev.creds.vault.core.data.db.dao.VaultQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
+import dev.creds.vault.core.data.db.entity.GeneratedValueEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
 import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
 import dev.creds.vault.core.model.FieldHistoryEntry
+import dev.creds.vault.core.model.GeneratedValue
 import dev.creds.vault.core.model.Tag
 import dev.creds.vault.core.model.VaultCounts
 import dev.creds.vault.core.model.VaultField
@@ -47,6 +49,7 @@ class VaultRepository internal constructor(
     private val fieldHistoryDao = database.fieldHistoryDao()
     private val tagDao = database.tagDao()
     private val searchDao = database.searchDao()
+    private val generatorHistoryDao = database.generatorHistoryDao()
 
     /**
      * Inserts or updates an item and its fields.
@@ -311,6 +314,48 @@ class VaultRepository internal constructor(
         }
     }
 
+    /**
+     * Remembers a generated value the user took.
+     *
+     * Keeps only the newest [GENERATOR_HISTORY_SIZE] and nothing older than
+     * [GENERATOR_HISTORY_TTL_MS]. Taking the same value twice in a row — copying it, then
+     * putting it in an item — records it once.
+     */
+    suspend fun recordGenerated(vaultKey: VaultKey, value: String, now: Long) {
+        if (value.isEmpty()) return
+        database.withTransaction {
+            val newest = generatorHistoryDao.all().firstOrNull()
+            if (newest != null && fieldCipher.openGenerated(vaultKey, newest.valueEnc) == value) {
+                return@withTransaction
+            }
+            generatorHistoryDao.insert(
+                GeneratedValueEntity(valueEnc = fieldCipher.sealGenerated(vaultKey, value), createdAt = now),
+            )
+            generatorHistoryDao.deleteOlderThan(now - GENERATOR_HISTORY_TTL_MS)
+            generatorHistoryDao.trimTo(GENERATOR_HISTORY_SIZE)
+        }
+    }
+
+    /**
+     * Recently generated values, newest first.
+     *
+     * Expired rows are deleted here rather than filtered out, so reading the list is also
+     * what removes a value once its day is up.
+     */
+    suspend fun generatedHistory(vaultKey: VaultKey, now: Long): List<GeneratedValue> {
+        generatorHistoryDao.deleteOlderThan(now - GENERATOR_HISTORY_TTL_MS)
+        return generatorHistoryDao.all().map {
+            GeneratedValue(id = it.id, value = fieldCipher.openGenerated(vaultKey, it.valueEnc), createdAt = it.createdAt)
+        }
+    }
+
+    /** Emits whenever generator history gains or loses rows. Carries no content. */
+    fun observeGeneratedHistoryChanges(): Flow<Int> = generatorHistoryDao.observeCount()
+
+    suspend fun deleteGenerated(id: Long) = generatorHistoryDao.delete(id)
+
+    suspend fun clearGenerated() = generatorHistoryDao.clear()
+
     private suspend fun duplicateOf(name: String, excludingId: Long?): TagResult.Duplicate? =
         tagDao.all()
             .firstOrNull { it.id != excludingId && TagNames.sameName(it.name, name) }
@@ -348,6 +393,14 @@ class VaultRepository internal constructor(
                 if (field.label.isNotEmpty()) append(' ').append(field.label)
                 if (field.value.isNotEmpty()) append(' ').append(field.value)
             }
+    }
+
+    companion object {
+        /** How many generated values are kept. */
+        const val GENERATOR_HISTORY_SIZE: Int = 20
+
+        /** How long a generated value is kept: one day. */
+        const val GENERATOR_HISTORY_TTL_MS: Long = 24L * 60 * 60 * 1000
     }
 
     private fun TagEntity.toModel() = Tag(id = id, name = name, color = color)

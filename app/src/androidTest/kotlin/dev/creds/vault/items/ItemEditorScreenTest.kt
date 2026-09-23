@@ -119,6 +119,17 @@ class ItemEditorScreenTest {
     }
 
     @Test
+    fun onlyPasswordFieldsOfferTheGenerator() {
+        var generating: String? = null
+        setContent(loaded, ItemEditorActions(onGenerate = { generating = it }))
+
+        compose.onAllNodesWithTag(ItemEditorTags.generate(username.key)).assertCountEquals(0)
+        compose.onNodeWithTag(ItemEditorTags.generate(password.key)).performClick()
+
+        assertEquals(password.key, generating)
+    }
+
+    @Test
     fun saveNeedsATitle() {
         setContent(loaded.copy(title = " "))
 

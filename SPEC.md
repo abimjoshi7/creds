@@ -275,3 +275,17 @@ Raise any of these and they change.
 - Locking discards an unsaved edit: a draft is plaintext, and it does not outlive the vault
 - Any item can gain or lose fields beyond its template's defaults; removed fields are
   tombstoned with their history, and imported section headings are kept
+- The generator remembers a value only when it is copied or put into an item, not every
+  draw; the same value taken twice in a row is kept once. Expired values are deleted the
+  next time the list is read or written, so one can outlive its 24 hours on disk,
+  still encrypted, until then
+- Random-password symbols leave out quotes, backslash, backtick and space, which break
+  sign-up forms, shell pastes and CSV exports
+- The entropy readout describes the generator's options, exactly: "at least one of each"
+  is counted by inclusion–exclusion, not approximated. Passphrase capitalisation and
+  separator add nothing; an injected digit adds log₂(words × 10)
+- The EFF wordlist is bundled verbatim, SHA-256
+  `addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e`, and parsed strictly
+- Generator options are stored in plain DataStore outside the vault: they describe a
+  policy, not a secret
+- The editor offers the generator on password fields only

@@ -82,3 +82,10 @@ data class FieldHistoryEntry(
     val value: String,
     val replacedAt: Long,
 )
+
+/** A value the generator produced and the user took, decrypted for display. Newest first. */
+data class GeneratedValue(
+    val id: Long,
+    val value: String,
+    val createdAt: Long,
+)

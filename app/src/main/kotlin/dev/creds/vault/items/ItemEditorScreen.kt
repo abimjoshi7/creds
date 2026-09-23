@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AlertDialog
@@ -55,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.creds.vault.core.domain.template.TemplateCatalog
 import dev.creds.vault.core.model.FieldType
 import dev.creds.vault.core.ui.theme.SecretTextStyle
+import dev.creds.vault.generator.GeneratorSheet
 
 object ItemEditorTags {
     const val TITLE = "item:title"
@@ -68,6 +70,7 @@ object ItemEditorTags {
     fun field(key: String) = "item:field:$key"
     fun reveal(key: String) = "item:field:$key:reveal"
     fun remove(key: String) = "item:field:$key:remove"
+    fun generate(key: String) = "item:field:$key:generate"
     fun kind(kind: CustomFieldKind) = "item:field:kind:${kind.name}"
 }
 
@@ -79,6 +82,7 @@ fun ItemEditorRoute(
     viewModel: ItemEditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var generatingFor by remember { mutableStateOf<String?>(null) }
 
     ItemEditorScreen(
         state = state,
@@ -90,10 +94,21 @@ fun ItemEditorRoute(
             onToggleFavorite = viewModel::toggleFavorite,
             onAddField = viewModel::addField,
             onRemoveField = viewModel::removeField,
+            onGenerate = { generatingFor = it },
             onSave = { viewModel.save(onSaved) },
         ),
         modifier = modifier,
     )
+
+    generatingFor?.let { key ->
+        GeneratorSheet(
+            onUse = { value ->
+                viewModel.onFieldChange(key, value)
+                generatingFor = null
+            },
+            onDismiss = { generatingFor = null },
+        )
+    }
 }
 
 /** Everything the editor can ask for; defaults are no-ops for tests. */
@@ -105,6 +120,8 @@ data class ItemEditorActions(
     val onToggleFavorite: () -> Unit = {},
     val onAddField: (CustomFieldKind, label: String) -> Unit = { _, _ -> },
     val onRemoveField: (key: String) -> Unit = {},
+    /** Opens the generator for a password field. */
+    val onGenerate: (key: String) -> Unit = {},
     val onSave: () -> Unit = {},
 )
 
@@ -213,6 +230,11 @@ fun ItemEditorScreen(
                             field = field,
                             onValueChange = { actions.onFieldChange(field.key, it) },
                             onRemove = { actions.onRemoveField(field.key) },
+                            onGenerate = if (field.type == FieldType.PASSWORD) {
+                                { actions.onGenerate(field.key) }
+                            } else {
+                                null
+                            },
                         )
                         if (field.type == FieldType.TOTP && field.value.isNotBlank()) {
                             TotpCodePanel(secret = field.value)
@@ -304,6 +326,7 @@ private fun ItemFieldEditor(
     field: EditableField,
     onValueChange: (String) -> Unit,
     onRemove: () -> Unit,
+    onGenerate: (() -> Unit)?,
 ) {
     // The field's own flag decides, not its type: a "Hidden text" field is a sensitive TEXT.
     val masked = field.sensitive
@@ -327,13 +350,25 @@ private fun ItemFieldEditor(
                 keyboardType = keyboardFor(field.type, masked),
                 imeAction = if (field.type == FieldType.MULTILINE) ImeAction.Default else ImeAction.Next,
             ),
-            trailingIcon = if (masked) {
+            trailingIcon = if (masked || onGenerate != null) {
                 {
-                    TextButton(
-                        onClick = { revealed = !revealed },
-                        modifier = Modifier.testTag(ItemEditorTags.reveal(field.key)),
-                    ) {
-                        Text(if (revealed) "Hide" else "Show")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (onGenerate != null) {
+                            IconButton(
+                                onClick = onGenerate,
+                                modifier = Modifier.testTag(ItemEditorTags.generate(field.key)),
+                            ) {
+                                Icon(Icons.Outlined.Casino, contentDescription = "Generate ${field.label}")
+                            }
+                        }
+                        if (masked) {
+                            TextButton(
+                                onClick = { revealed = !revealed },
+                                modifier = Modifier.testTag(ItemEditorTags.reveal(field.key)),
+                            ) {
+                                Text(if (revealed) "Hide" else "Show")
+                            }
+                        }
                     }
                 }
             } else {
