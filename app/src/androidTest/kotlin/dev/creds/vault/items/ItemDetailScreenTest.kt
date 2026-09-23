@@ -11,8 +11,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.creds.vault.core.model.AssociationKind
 import dev.creds.vault.core.model.FieldHistoryEntry
+import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.FieldType
 import dev.creds.vault.core.model.Template
 import dev.creds.vault.core.model.VaultField
@@ -189,6 +192,23 @@ class ItemDetailScreenTest {
         compose.onNodeWithTag(ItemDetailTags.NOTE_COPY).performClick()
 
         assertEquals("backup codes in the safe", copied)
+    }
+
+    @Test
+    fun trustedAppsAndSitesAreListedAndRemovable() {
+        var removed: ItemAssociation? = null
+        val site = ItemAssociation(AssociationKind.DOMAIN, "bank.com", null, 1)
+        val app = ItemAssociation(AssociationKind.APP, "com.example.bank", "0123456789ABCDEF".repeat(4), 1)
+        setContent(
+            ItemDetailUiState(loading = false, item = login, associations = listOf(site, app)),
+            ItemDetailActions(onRemoveAssociation = { removed = it }),
+        )
+
+        compose.onNodeWithTag(ItemDetailTags.CONTENT).performScrollToNode(hasTestTag(ItemDetailTags.association("com.example.bank")))
+        compose.onNode(hasText("com.example.bank · key 0123 4567 89AB CDEF…")).assertIsDisplayed()
+        compose.onNodeWithTag(ItemDetailTags.removeAssociation("com.example.bank")).performClick()
+
+        assertEquals(app, removed)
     }
 
     @Test

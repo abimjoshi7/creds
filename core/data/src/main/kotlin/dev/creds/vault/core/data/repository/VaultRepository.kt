@@ -11,13 +11,17 @@ import dev.creds.vault.core.data.db.dao.VaultQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
 import dev.creds.vault.core.data.db.entity.GeneratedValueEntity
+import dev.creds.vault.core.data.db.entity.ItemAssociationEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
+import dev.creds.vault.core.domain.autofill.AutofillCandidate
 import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
 import dev.creds.vault.core.domain.template.TemplateCatalog
+import dev.creds.vault.core.model.AssociationKind
 import dev.creds.vault.core.model.FieldHistoryEntry
+import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.GeneratedValue
 import dev.creds.vault.core.model.Tag
 import dev.creds.vault.core.model.VaultCounts
@@ -53,6 +57,7 @@ class VaultRepository internal constructor(
     private val searchDao = database.searchDao()
     private val generatorHistoryDao = database.generatorHistoryDao()
     private val auditDao = database.auditDao()
+    private val associationDao = database.associationDao()
 
     /** The vault audit, over the same open database. */
     val audit: AuditRepository = AuditRepository(database, fieldCipher)
@@ -349,6 +354,58 @@ class VaultRepository internal constructor(
     }
 
     /**
+     * Live items as autofill matching sees them: titles, websites and confirmed
+     * associations, all plaintext inside the database. Archived and trashed items are
+     * never offered.
+     */
+    suspend fun autofillCandidates(): List<AutofillCandidate> {
+        val websites = associationDao.websites().groupBy({ it.itemUuid }, { it.value })
+        val associations = associationDao.all().groupBy { it.itemUuid }
+        return associationDao.autofillItems().map { row ->
+            AutofillCandidate(
+                uuid = row.uuid,
+                title = row.title,
+                subtitle = row.subtitle,
+                template = row.template,
+                websites = websites[row.uuid].orEmpty(),
+                associations = associations[row.uuid].orEmpty().mapNotNull { it.toModel() },
+            )
+        }
+    }
+
+    suspend fun associations(itemUuid: String): List<ItemAssociation> =
+        associationDao.forItem(itemUuid).mapNotNull { it.toModel() }
+
+    /**
+     * Records that the user confirmed [association] for an item — trust on first use.
+     *
+     * Replaces any earlier record for the same package or domain, and marks the item
+     * updated so an open item view, and a future sync layer, see the change.
+     */
+    suspend fun recordAssociation(itemUuid: String, association: ItemAssociation, now: Long) {
+        database.withTransaction {
+            associationDao.delete(itemUuid, association.kind.id, association.value)
+            associationDao.upsert(
+                ItemAssociationEntity(
+                    itemUuid = itemUuid,
+                    kind = association.kind.id,
+                    value = association.value,
+                    certSha256 = association.certSha256,
+                    confirmedAt = association.confirmedAt,
+                ),
+            )
+            itemDao.touch(itemUuid, now)
+        }
+    }
+
+    suspend fun removeAssociation(itemUuid: String, kind: AssociationKind, value: String, now: Long) {
+        database.withTransaction {
+            associationDao.delete(itemUuid, kind.id, value)
+            itemDao.touch(itemUuid, now)
+        }
+    }
+
+    /**
      * Remembers a generated value the user took.
      *
      * Keeps only the newest [GENERATOR_HISTORY_SIZE] and nothing older than
@@ -438,6 +495,10 @@ class VaultRepository internal constructor(
     }
 
     private fun TagEntity.toModel() = Tag(id = id, name = name, color = color)
+
+    /** Null for a kind this build does not know, so a newer vault still opens. */
+    private fun ItemAssociationEntity.toModel(): ItemAssociation? =
+        AssociationKind.fromId(kind)?.let { ItemAssociation(it, value, certSha256, confirmedAt) }
 
     private fun ItemEntity.toSummary(tags: List<Tag>) = VaultItemSummary(
         uuid = uuid,

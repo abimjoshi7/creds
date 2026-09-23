@@ -107,6 +107,7 @@ object VaultListTags {
     const val CLEAR_FILTERS = "vault:filters:clear"
     const val ADD = "vault:add"
     const val AUDIT = "vault:audit"
+    const val AUTOFILL = "vault:autofill"
 
     fun item(uuid: String) = "vault:item:$uuid"
     fun favorite(uuid: String) = "vault:item:$uuid:favorite"
@@ -150,6 +151,7 @@ data class VaultListActions(
     val onManageTags: () -> Unit = {},
     val onOpenGenerator: () -> Unit = {},
     val onOpenAudit: () -> Unit = {},
+    val onOpenAutofill: () -> Unit = {},
     val onOpenItem: (VaultItemSummary) -> Unit = {},
     val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
@@ -161,6 +163,7 @@ fun VaultListRoute(
     onManageTags: () -> Unit,
     onOpenGenerator: () -> Unit,
     onOpenAudit: () -> Unit,
+    onOpenAutofill: () -> Unit,
     onOpenItem: (String) -> Unit,
     onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
@@ -221,6 +224,7 @@ fun VaultListRoute(
             onManageTags = onManageTags,
             onOpenGenerator = onOpenGenerator,
             onOpenAudit = onOpenAudit,
+            onOpenAutofill = onOpenAutofill,
             onOpenItem = { onOpenItem(it.uuid) },
             onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
@@ -295,6 +299,10 @@ fun VaultListScreen(
                     onOpenAudit = {
                         closeDrawer()
                         actions.onOpenAudit()
+                    },
+                    onOpenAutofill = {
+                        closeDrawer()
+                        actions.onOpenAutofill()
                     },
                 )
             }
@@ -518,6 +526,7 @@ fun VaultDrawerContent(
     onTag: (Long) -> Unit,
     onManageTags: () -> Unit,
     onOpenAudit: () -> Unit = {},
+    onOpenAutofill: () -> Unit = {},
 ) {
     val filter = state.filter
     val counts = state.counts
@@ -556,6 +565,15 @@ fun VaultDrawerContent(
                 colors = itemColors,
                 shape = RoundedCornerShape(CredsRadiusSmall),
                 modifier = Modifier.testTag(VaultListTags.AUDIT),
+            )
+            NavigationDrawerItem(
+                label = { Text("Autofill") },
+                icon = { Icon(Icons.Outlined.Password, contentDescription = null) },
+                selected = false,
+                onClick = onOpenAutofill,
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
+                modifier = Modifier.testTag(VaultListTags.AUTOFILL),
             )
         }
         items(DrawerAuditLists.filter { (counts.of(it) ?: 0) > 0 || filter.smartList == it }) { list ->

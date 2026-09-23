@@ -174,4 +174,27 @@ internal interface AssociationDao {
 
     @Query("DELETE FROM item_associations WHERE item_uuid = :itemUuid AND kind = :kind AND value = :value")
     suspend fun delete(itemUuid: String, kind: String, value: String)
+
+    @Query("SELECT * FROM item_associations")
+    suspend fun all(): List<ItemAssociationEntity>
+
+    /** Everything autofill needs to match live items, with nothing decrypted. */
+    @Query("SELECT uuid, title, subtitle, template FROM items WHERE trashed = 0 AND archived = 0 ORDER BY title COLLATE NOCASE")
+    suspend fun autofillItems(): List<AutofillItemRow>
+
+    /** Websites of non-sensitive URL fields, which are plaintext in `search_text`. */
+    @Query("SELECT item_uuid, search_text FROM fields WHERE deleted = 0 AND type = 'url' AND search_text IS NOT NULL")
+    suspend fun websites(): List<WebsiteRow>
 }
+
+internal data class AutofillItemRow(
+    @ColumnInfo(name = "uuid") val uuid: String,
+    @ColumnInfo(name = "title") val title: String,
+    @ColumnInfo(name = "subtitle") val subtitle: String,
+    @ColumnInfo(name = "template") val template: Template,
+)
+
+internal data class WebsiteRow(
+    @ColumnInfo(name = "item_uuid") val itemUuid: String,
+    @ColumnInfo(name = "search_text") val value: String,
+)

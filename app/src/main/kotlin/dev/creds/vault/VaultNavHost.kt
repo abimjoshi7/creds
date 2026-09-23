@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import dev.creds.vault.audit.AuditRoute
+import dev.creds.vault.autofill.AutofillSettingsRoute
 import dev.creds.vault.generator.GeneratorRoute
 import dev.creds.vault.items.ItemDetailRoute
 import dev.creds.vault.items.ItemEditorRoute
@@ -25,6 +26,9 @@ data object GeneratorDestination
 
 @Serializable
 data object AuditDestination
+
+@Serializable
+data object AutofillSettingsDestination
 
 @Serializable
 data class ItemDetailDestination(val uuid: String)
@@ -60,6 +64,7 @@ fun VaultNavHost(
                 onManageTags = { navController.navigate(ManageTagsDestination) { launchSingleTop = true } },
                 onOpenGenerator = { navController.navigate(GeneratorDestination) { launchSingleTop = true } },
                 onOpenAudit = { navController.navigate(AuditDestination) { launchSingleTop = true } },
+                onOpenAutofill = { navController.navigate(AutofillSettingsDestination) { launchSingleTop = true } },
                 onOpenItem = { uuid ->
                     navController.navigate(ItemDetailDestination(uuid)) { launchSingleTop = true }
                 },
@@ -74,6 +79,9 @@ fun VaultNavHost(
         }
         composable<GeneratorDestination> {
             GeneratorRoute(onBack = { navController.popBackStack() })
+        }
+        composable<AutofillSettingsDestination> {
+            AutofillSettingsRoute(onBack = { navController.popBackStack() })
         }
         composable<AuditDestination> {
             AuditRoute(

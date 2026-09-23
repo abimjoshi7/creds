@@ -312,3 +312,21 @@ Raise any of these and they change.
   place, and an online miss never clears an offline hit
 - Cached audit results record the rules version that produced them; a build that changes
   the rules or the breach list rescores the whole vault
+- Autofill matches websites against an item's saved website fields and confirmed domains
+  at eTLD+1, using the Public Suffix List (github.com/publicsuffix/list at commit
+  `3955e3ec29b94c3cca7bd4509c5f14a7c0959e26`, private domains included, so two
+  `github.io` sites are different sites). Websites marked sensitive are not matched
+- The browser allowlist is Google's Credential Manager privileged-apps list (release
+  signatures only), minus non-browsers, debug builds, and `com.android.browser`, whose
+  listed key is the public AOSP test key. A browser off the list is treated as an app
+- Apps are never matched by name or by website. The first fill in an app goes through
+  "Search Creds…", which asks before remembering the app's package and signing key;
+  saving a login from an app counts as that confirmation. A rotated key keeps trust only
+  through the platform-verified signing lineage
+- Payment cards and identities are offered on any card or address form, since they are
+  not tied to a site; they still fill only when chosen
+- Creds declares launcher apps visible (`<queries>`) so it can read the signing key of
+  the app being filled, rather than requesting `QUERY_ALL_PACKAGES`
+- PIN-type fields and new-password fields are never filled; a new password is what gets
+  offered for saving
+- Trusted apps and sites are listed on the item and can be removed there

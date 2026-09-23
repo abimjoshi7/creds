@@ -10,6 +10,7 @@ import dev.creds.vault.core.crypto.VaultKey
 import dev.creds.vault.core.data.repository.TagResult
 import dev.creds.vault.core.data.repository.VaultRepository
 import dev.creds.vault.core.data.vault.VaultManager
+import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.Tag
 import dev.creds.vault.core.model.VaultField
 import dev.creds.vault.core.model.VaultItem
@@ -79,6 +80,7 @@ class ItemDetailViewModel @Inject constructor(
                     loading = false,
                     item = content.item,
                     historyCounts = content.historyCounts,
+                    associations = content.associations,
                     allTags = content.allTags,
                     history = history,
                 )
@@ -99,7 +101,7 @@ class ItemDetailViewModel @Inject constructor(
                 .filter { it.sensitive && !it.deleted }
                 .associate { it.uid to repository.fieldHistoryCount(it.uid) }
                 .filterValues { it > 0 }
-            Content.Loaded(item, counts)
+            Content.Loaded(item, counts, associations = repository.associations(uuid))
         } ?: Content.Locked
 
     fun setFavorite(favorite: Boolean) = mutate { repository, _ ->
@@ -126,6 +128,11 @@ class ItemDetailViewModel @Inject constructor(
 
     fun setTags(tagIds: Set<Long>) = mutate { repository, _ ->
         repository.setItemTags(uuid, tagIds, now())
+    }
+
+    /** Stops autofilling this item for an app or site until the user confirms it again. */
+    fun removeAssociation(association: ItemAssociation) = mutate { repository, _ ->
+        repository.removeAssociation(uuid, association.kind, association.value, now())
     }
 
     fun createTag(name: String, onResult: (TagResult) -> Unit) = mutate { repository, _ ->
@@ -165,6 +172,7 @@ class ItemDetailViewModel @Inject constructor(
         data class Loaded(
             val item: VaultItem,
             val historyCounts: Map<Long, Int>,
+            val associations: List<ItemAssociation> = emptyList(),
             val allTags: List<Tag> = emptyList(),
         ) : Content
     }
@@ -176,6 +184,8 @@ data class ItemDetailUiState(
     val item: VaultItem? = null,
     /** Field uid to number of previous values, for fields that have any. */
     val historyCounts: Map<Long, Int> = emptyMap(),
+    /** Apps and sites this item has been confirmed to autofill. */
+    val associations: List<ItemAssociation> = emptyList(),
     val allTags: List<Tag> = emptyList(),
     val history: FieldHistoryState? = null,
 )

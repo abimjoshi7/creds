@@ -89,3 +89,31 @@ data class GeneratedValue(
     val value: String,
     val createdAt: Long,
 )
+
+/** What an autofill association identifies. [id] is the stored `kind` column value. */
+enum class AssociationKind(val id: String) {
+    /** A native app: package name plus signing certificate. */
+    APP("package"),
+
+    /** A website, by registrable domain. */
+    DOMAIN("domain"),
+    ;
+
+    companion object {
+        fun fromId(id: String): AssociationKind? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/**
+ * Somewhere an item has been confirmed to fill.
+ *
+ * @param value a package name, or a registrable domain.
+ * @param certSha256 for an app, the SHA-256 of its signing certificate(s), sorted and
+ *   comma-joined; null for a domain.
+ */
+data class ItemAssociation(
+    val kind: AssociationKind,
+    val value: String,
+    val certSha256: String?,
+    val confirmedAt: Long,
+)

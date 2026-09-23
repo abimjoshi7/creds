@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.StarOutline
@@ -57,13 +58,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.creds.vault.core.domain.template.TemplateCatalog
+import dev.creds.vault.core.model.AssociationKind
 import dev.creds.vault.core.model.FieldType
+import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.Tag
 import dev.creds.vault.core.model.VaultField
 import dev.creds.vault.core.model.VaultItem
@@ -93,6 +97,8 @@ object ItemDetailTags {
     fun copy(uid: Long) = "detail:field:$uid:copy"
     fun history(uid: Long) = "detail:field:$uid:history"
     fun menu(action: String) = "detail:menu:$action"
+    fun association(value: String) = "detail:autofill:$value"
+    fun removeAssociation(value: String) = "detail:autofill:$value:remove"
 }
 
 @Composable
@@ -129,6 +135,7 @@ fun ItemDetailRoute(
             onEditTags = { tagging = true },
             onOpenHistory = viewModel::openHistory,
             onDismissHistory = viewModel::dismissHistory,
+            onRemoveAssociation = viewModel::removeAssociation,
             onCopy = { label, value ->
                 copySensitive(label, value)
                 scope.launch {
@@ -172,6 +179,7 @@ data class ItemDetailActions(
     val onEditTags: () -> Unit = {},
     val onOpenHistory: (VaultField) -> Unit = {},
     val onDismissHistory: () -> Unit = {},
+    val onRemoveAssociation: (ItemAssociation) -> Unit = {},
     val onCopy: (label: String, value: String) -> Unit = { _, _ -> },
 )
 
@@ -222,6 +230,7 @@ fun ItemDetailScreen(
             else -> ItemDetailContent(
                 item = item,
                 historyCounts = state.historyCounts,
+                associations = state.associations,
                 actions = actions,
                 contentPadding = padding,
             )
@@ -319,6 +328,7 @@ private fun DetailActions(item: VaultItem, actions: ItemDetailActions, onDeleteF
 private fun ItemDetailContent(
     item: VaultItem,
     historyCounts: Map<Long, Int>,
+    associations: List<ItemAssociation>,
     actions: ItemDetailActions,
     contentPadding: PaddingValues,
 ) {
@@ -446,6 +456,20 @@ private fun ItemDetailContent(
             }
         }
 
+        if (associations.isNotEmpty()) {
+            item(key = "autofill-heading") {
+                Text(
+                    "Autofill",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            items(associations, key = { "autofill:${it.kind}:${it.value}" }) { association ->
+                AssociationRow(association, onRemove = { actions.onRemoveAssociation(association) })
+            }
+        }
+
         item(key = "dates") {
             Column(Modifier.padding(top = 8.dp)) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -520,6 +544,40 @@ private fun FieldValueRow(
                     modifier = Modifier.padding(start = 6.dp),
                 )
             }
+        }
+    }
+}
+
+/** A site or app this item fills, named the way the user knows it. */
+@Composable
+private fun AssociationRow(association: ItemAssociation, onRemove: () -> Unit) {
+    val context = LocalContext.current
+    val (title, detail) = when (association.kind) {
+        AssociationKind.DOMAIN -> association.value to "Website"
+        AssociationKind.APP -> {
+            val label = remember(association.value) {
+                runCatching {
+                    val pm = context.packageManager
+                    pm.getApplicationLabel(pm.getApplicationInfo(association.value, 0)).toString()
+                }.getOrDefault(association.value)
+            }
+            val key = association.certSha256?.substringBefore(',')?.take(16)?.chunked(4)?.joinToString(" ")
+            label to listOfNotNull(association.value, key?.let { "key $it…" }).joinToString(" · ")
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag(ItemDetailTags.association(association.value))) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onRemove, modifier = Modifier.testTag(ItemDetailTags.removeAssociation(association.value))) {
+            Icon(Icons.Outlined.LinkOff, contentDescription = "Stop filling in $title")
         }
     }
 }

@@ -21,6 +21,8 @@ hiltNavigationCompose = "1.4.0"
 room = "2.8.4"
 datastore = "1.2.1"
 biometric = "1.1.0"
+# Inline suggestion slices for the autofill service (keyboard strip, API 30+).
+autofill = "1.3.0"
 # BiometricPrompt only accepts a FragmentActivity, so MainActivity extends one. Declared
 # explicitly rather than leaned on transitively through biometric: a superclass arriving
 # by accident breaks the day that dependency is bumped.
@@ -49,6 +51,7 @@ androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-autofill = { module = "androidx.autofill:autofill", version.ref = "autofill" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 

@@ -35,5 +35,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Autofill's unlock, pick and save screens, started only by Creds' own autofill
+          service. Not exported. An empty task affinity keeps it in the task of the app
+          being filled, so finishing returns there rather than into Creds.
+        -->
+        <activity
+            android:name=".autofill.AutofillActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Creds"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
