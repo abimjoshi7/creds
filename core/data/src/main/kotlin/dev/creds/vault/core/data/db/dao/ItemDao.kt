@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
+import dev.creds.vault.core.data.db.entity.AuditScoreEntity
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
 import dev.creds.vault.core.data.db.entity.ItemEntity
@@ -50,11 +51,12 @@ internal interface ItemDao {
      * The item list, for any [VaultQuery] combination.
      *
      * Observes `item_tags` as well as `items` so that tagging an item re-runs a tag
-     * filter. The FTS table cannot be observed — Room does not know it exists — but it is
-     * only ever written in the same transaction as an `items` row, so an `items`
-     * invalidation always accompanies an index change.
+     * filter, and `fields` and `audit_scores` so the weak, reused and breached lists
+     * update as the background audit writes scores. The FTS table cannot be observed —
+     * Room does not know it exists — but it is only ever written in the same transaction
+     * as an `items` row, so an `items` invalidation always accompanies an index change.
      */
-    @RawQuery(observedEntities = [ItemEntity::class, ItemTagCrossRef::class])
+    @RawQuery(observedEntities = [ItemEntity::class, ItemTagCrossRef::class, FieldEntity::class, AuditScoreEntity::class])
     fun observe(query: SupportSQLiteQuery): Flow<List<ItemEntity>>
 
     @Query("UPDATE items SET favorite = :favorite, updated_at = :now WHERE uuid = :uuid")

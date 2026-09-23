@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
@@ -105,6 +106,7 @@ object VaultListTags {
     const val EMPTY = "vault:empty"
     const val CLEAR_FILTERS = "vault:filters:clear"
     const val ADD = "vault:add"
+    const val AUDIT = "vault:audit"
 
     fun item(uuid: String) = "vault:item:$uuid"
     fun favorite(uuid: String) = "vault:item:$uuid:favorite"
@@ -117,9 +119,13 @@ object VaultListTags {
     const val CONFIRM = "vault:confirm"
 }
 
-/** The smart lists this build can answer. Weak, reused and breached arrive with the audit. */
+/** The smart lists always shown in the drawer. */
 val DrawerSmartLists: List<SmartList> =
     listOf(SmartList.ALL, SmartList.FAVORITES, SmartList.ARCHIVE, SmartList.TRASH)
+
+/** Audit lists, shown only while they hold something (or are the one selected). */
+val DrawerAuditLists: List<SmartList> =
+    listOf(SmartList.BREACHED, SmartList.REUSED, SmartList.WEAK)
 
 /**
  * Everything the list screen can ask for.
@@ -143,6 +149,7 @@ data class VaultListActions(
     val onEditTags: (VaultItemSummary) -> Unit = {},
     val onManageTags: () -> Unit = {},
     val onOpenGenerator: () -> Unit = {},
+    val onOpenAudit: () -> Unit = {},
     val onOpenItem: (VaultItemSummary) -> Unit = {},
     val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
@@ -153,6 +160,7 @@ data class VaultListActions(
 fun VaultListRoute(
     onManageTags: () -> Unit,
     onOpenGenerator: () -> Unit,
+    onOpenAudit: () -> Unit,
     onOpenItem: (String) -> Unit,
     onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
@@ -212,6 +220,7 @@ fun VaultListRoute(
             onEditTags = { tagging = it },
             onManageTags = onManageTags,
             onOpenGenerator = onOpenGenerator,
+            onOpenAudit = onOpenAudit,
             onOpenItem = { onOpenItem(it.uuid) },
             onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
@@ -282,6 +291,10 @@ fun VaultListScreen(
                     onManageTags = {
                         closeDrawer()
                         actions.onManageTags()
+                    },
+                    onOpenAudit = {
+                        closeDrawer()
+                        actions.onOpenAudit()
                     },
                 )
             }
@@ -504,6 +517,7 @@ fun VaultDrawerContent(
     onTemplate: (Template) -> Unit,
     onTag: (Long) -> Unit,
     onManageTags: () -> Unit,
+    onOpenAudit: () -> Unit = {},
 ) {
     val filter = state.filter
     val counts = state.counts
@@ -516,6 +530,35 @@ fun VaultDrawerContent(
         item { DrawerHeading("Creds") }
 
         items(DrawerSmartLists) { list ->
+            NavigationDrawerItem(
+                label = { Text(list.label) },
+                icon = { Icon(list.icon, contentDescription = null) },
+                badge = { CountBadge(counts.of(list)) },
+                selected = filter.smartList == list,
+                onClick = { onSmartList(list) },
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
+                modifier = Modifier.testTag(VaultListTags.smartList(list)),
+            )
+        }
+
+        item {
+            HorizontalDivider(
+                Modifier.padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            DrawerHeading("Security")
+            NavigationDrawerItem(
+                label = { Text("Password health") },
+                icon = { Icon(Icons.Outlined.HealthAndSafety, contentDescription = null) },
+                selected = false,
+                onClick = onOpenAudit,
+                colors = itemColors,
+                shape = RoundedCornerShape(CredsRadiusSmall),
+                modifier = Modifier.testTag(VaultListTags.AUDIT),
+            )
+        }
+        items(DrawerAuditLists.filter { (counts.of(it) ?: 0) > 0 || filter.smartList == it }) { list ->
             NavigationDrawerItem(
                 label = { Text(list.label) },
                 icon = { Icon(list.icon, contentDescription = null) },
@@ -884,6 +927,12 @@ private fun EmptyState(state: VaultListUiState, actions: VaultListActions) {
             "Nothing archived" to "Archived items are kept but stay out of the main list."
         filter.smartList == SmartList.TRASH ->
             "Trash is empty" to "Items you delete wait here until you empty the trash."
+        filter.smartList == SmartList.WEAK ->
+            "No weak passwords" to "Passwords are scored as they are saved."
+        filter.smartList == SmartList.REUSED ->
+            "No reused passwords" to "Every password here is used in one item only."
+        filter.smartList == SmartList.BREACHED ->
+            "No breached passwords" to "None of your passwords appear in the known breach lists."
         else ->
             "No items" to "Everything in your vault is archived or in the trash."
     }

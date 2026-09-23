@@ -2,6 +2,7 @@ package dev.creds.vault
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import dev.creds.vault.audit.AuditCoordinator
 import dev.creds.vault.lock.LockCoordinator
 import javax.inject.Inject
 
@@ -16,8 +17,13 @@ class CredsApplication : Application() {
     @Inject
     lateinit var lockCoordinator: LockCoordinator
 
+    /** Scores passwords in the background while the vault is open; idle while locked. */
+    @Inject
+    lateinit var auditCoordinator: AuditCoordinator
+
     override fun onCreate() {
         super.onCreate()
         lockCoordinator.start()
+        auditCoordinator.start()
     }
 }

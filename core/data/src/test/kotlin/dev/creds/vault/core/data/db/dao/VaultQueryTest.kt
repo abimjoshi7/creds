@@ -139,12 +139,41 @@ class VaultQueryTest {
     }
 
     @Test
-    fun `smart lists that need audit or usage data are refused`() {
-        listOf(SmartList.WEAK, SmartList.REUSED, SmartList.BREACHED, SmartList.RECENTLY_USED)
-            .forEach { list ->
-                assertThat(runCatching { VaultQuery.build(VaultFilter(smartList = list)) })
-                    .isFailure()
-                    .isInstanceOf(IllegalArgumentException::class)
-            }
+    fun `recently used needs usage data and is refused`() {
+        assertThat(runCatching { VaultQuery.build(VaultFilter(smartList = SmartList.RECENTLY_USED)) })
+            .isFailure()
+            .isInstanceOf(IllegalArgumentException::class)
+    }
+
+    @Test
+    fun `audit lists narrow the default view by the shared audit statements`() {
+        mapOf(
+            SmartList.WEAK to AuditSql.weakItems,
+            SmartList.REUSED to AuditSql.reusedItems,
+            SmartList.BREACHED to AuditSql.breachedItems,
+        ).forEach { (list, audit) ->
+            val statement = VaultQuery.build(VaultFilter(smartList = list))
+
+            assertThat(statement.sql).contains("(trashed = 0 AND archived = 0)")
+            assertThat(statement.sql).contains("(uuid IN (${audit.sql}))")
+            assertThat(statement.args).isEqualTo(audit.args)
+        }
+    }
+
+    @Test
+    fun `audit arguments come before later filters, in placeholder order`() {
+        val statement = VaultQuery.build(VaultFilter(smartList = SmartList.WEAK, template = Template.LOGIN))
+
+        assertThat(statement.args).isEqualTo(AuditSql.weakItems.args + "login")
+        assertThat(statement.sql.count { it == '?' }).isEqualTo(statement.args.size)
+    }
+
+    @Test
+    fun `every audit statement binds exactly its placeholders`() {
+        listOf(AuditSql.weakItems, AuditSql.reusedItems, AuditSql.breachedItems, AuditSql.counts).forEach {
+            assertThat(it.sql.count { c -> c == '?' }).isEqualTo(it.args.size)
+        }
+        assertThat(AuditSql.weakItems.args).contains(2)
+        assertThat(AuditSql.weakItems.sql).doesNotContain("'password'")
     }
 }

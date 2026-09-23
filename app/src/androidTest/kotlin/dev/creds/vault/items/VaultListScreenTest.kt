@@ -354,6 +354,24 @@ class VaultListScreenTest {
     }
 
     @Test
+    fun auditListsAppearInTheDrawerOnlyWhenTheyHoldSomething() {
+        compose.setContent {
+            VaultDrawerContent(
+                state = VaultListUiState(counts = populated.copy(weak = 2)),
+                onSmartList = {},
+                onTemplate = {},
+                onTag = {},
+                onManageTags = {},
+            )
+        }
+
+        compose.onNodeWithTag(VaultListTags.smartList(SmartList.WEAK)).assertIsDisplayed()
+        compose.onAllNodesWithTag(VaultListTags.smartList(SmartList.BREACHED)).assertCountEquals(0)
+        compose.onAllNodesWithTag(VaultListTags.smartList(SmartList.REUSED)).assertCountEquals(0)
+        compose.onNodeWithTag(VaultListTags.AUDIT).assertIsDisplayed()
+    }
+
+    @Test
     fun drawerReportsSelections() {
         var list: SmartList? = null
         var tag: Long? = null

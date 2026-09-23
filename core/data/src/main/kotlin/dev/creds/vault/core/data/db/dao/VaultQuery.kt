@@ -21,9 +21,11 @@ internal data class SqlStatement(val sql: String, val args: List<Any>)
  */
 internal object VaultQuery {
 
-    /** Smart lists answerable from item columns alone. The rest arrive with their data. */
-    val SUPPORTED: Set<SmartList> =
-        setOf(SmartList.ALL, SmartList.FAVORITES, SmartList.ARCHIVE, SmartList.TRASH)
+    /** Every smart list with data behind it. Recently used waits for usage tracking. */
+    val SUPPORTED: Set<SmartList> = setOf(
+        SmartList.ALL, SmartList.FAVORITES, SmartList.ARCHIVE, SmartList.TRASH,
+        SmartList.WEAK, SmartList.REUSED, SmartList.BREACHED,
+    )
 
     fun build(filter: VaultFilter): SqlStatement {
         require(filter.smartList in SUPPORTED) {
@@ -38,6 +40,16 @@ internal object VaultQuery {
             SmartList.ARCHIVE -> "trashed = 0 AND archived = 1"
             SmartList.TRASH -> "trashed = 1"
             else -> "trashed = 0 AND archived = 0"
+        }
+
+        when (filter.smartList) {
+            SmartList.WEAK -> AuditSql.weakItems
+            SmartList.REUSED -> AuditSql.reusedItems
+            SmartList.BREACHED -> AuditSql.breachedItems
+            else -> null
+        }?.let { audit ->
+            where += "uuid IN (${audit.sql})"
+            args.addAll(audit.args)
         }
 
         filter.template?.let {

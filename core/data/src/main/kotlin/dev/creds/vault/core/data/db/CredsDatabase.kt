@@ -43,12 +43,15 @@ import dev.creds.vault.core.data.db.entity.TagEntity
         AuditScoreEntity::class,
         GeneratedValueEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
     autoMigrations = [
         // 2: generator_history. A new table only, which Room can derive from the two
         // exported schemas; nothing existing is touched.
         AutoMigration(from = 1, to = 2),
+        // 3: breach columns on audit_scores, all defaulted or nullable. Existing scores
+        // keep their values and read as "not breached, never checked online".
+        AutoMigration(from = 2, to = 3),
     ],
 )
 @TypeConverters(Converters::class)

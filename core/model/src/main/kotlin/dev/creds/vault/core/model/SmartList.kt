@@ -53,6 +53,9 @@ data class VaultCounts(
     val favorites: Int = 0,
     val archive: Int = 0,
     val trash: Int = 0,
+    val weak: Int = 0,
+    val reused: Int = 0,
+    val breached: Int = 0,
     val byTemplate: Map<Template, Int> = emptyMap(),
     val byTag: Map<Long, Int> = emptyMap(),
 ) {
@@ -64,6 +67,9 @@ data class VaultCounts(
         SmartList.FAVORITES -> favorites
         SmartList.ARCHIVE -> archive
         SmartList.TRASH -> trash
-        else -> null
+        SmartList.WEAK -> weak
+        SmartList.REUSED -> reused
+        SmartList.BREACHED -> breached
+        SmartList.RECENTLY_USED -> null
     }
 }

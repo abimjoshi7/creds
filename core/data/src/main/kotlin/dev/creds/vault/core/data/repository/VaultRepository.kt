@@ -5,6 +5,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import dev.creds.vault.core.crypto.VaultKey
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
+import dev.creds.vault.core.data.db.dao.AuditSql
 import dev.creds.vault.core.data.db.dao.SearchQuery
 import dev.creds.vault.core.data.db.dao.VaultQuery
 import dev.creds.vault.core.data.db.entity.FieldEntity
@@ -15,6 +16,7 @@ import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
 import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
+import dev.creds.vault.core.domain.template.TemplateCatalog
 import dev.creds.vault.core.model.FieldHistoryEntry
 import dev.creds.vault.core.model.GeneratedValue
 import dev.creds.vault.core.model.Tag
@@ -50,6 +52,10 @@ class VaultRepository internal constructor(
     private val tagDao = database.tagDao()
     private val searchDao = database.searchDao()
     private val generatorHistoryDao = database.generatorHistoryDao()
+    private val auditDao = database.auditDao()
+
+    /** The vault audit, over the same open database. */
+    val audit: AuditRepository = AuditRepository(database, fieldCipher)
 
     /**
      * Inserts or updates an item and its fields.
@@ -224,15 +230,43 @@ class VaultRepository internal constructor(
         itemDao.observeListCounts(),
         itemDao.observeTemplateCounts(),
         tagDao.observeTagCounts(),
-    ) { lists, templates, tags ->
+        auditDao.observeCounts(SimpleSQLiteQuery(AuditSql.counts.sql, AuditSql.counts.args.toTypedArray())),
+    ) { lists, templates, tags, audit ->
         VaultCounts(
             all = lists.active,
             favorites = lists.favorites,
             archive = lists.archived,
             trash = lists.trashed,
+            weak = audit.weak,
+            reused = audit.reused,
+            breached = audit.breached,
             byTemplate = templates.associate { it.template to it.count },
             byTag = tags.associate { it.tagId to it.count },
         )
+    }
+
+    /**
+     * Replaces one field's value, e.g. an audit fix upgrading a website to https.
+     *
+     * Goes through [save], so history, search, the subtitle and the audit's change
+     * tracking all see it exactly as they would an edit. False when the item or field is
+     * gone.
+     */
+    suspend fun updateFieldValue(vaultKey: VaultKey, itemUuid: String, fieldUid: Long, value: String, now: Long): Boolean {
+        val item = load(vaultKey, itemUuid) ?: return false
+        if (item.fields.none { it.uid == fieldUid }) return false
+        val fields = item.fields.map {
+            if (it.uid == fieldUid) it.copy(value = value, updatedAt = now, valueUpdatedAt = now) else it
+        }
+        save(
+            vaultKey,
+            item.copy(
+                subtitle = TemplateCatalog.subtitleFor(item.template, fields),
+                updatedAt = now,
+                fields = fields,
+            ),
+        )
+        return true
     }
 
     suspend fun setFavorite(uuid: String, favorite: Boolean, now: Long) =

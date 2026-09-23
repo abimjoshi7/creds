@@ -8,6 +8,9 @@ import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.GppBad
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Key
@@ -37,6 +40,9 @@ val SmartList.icon: ImageVector
         SmartList.FAVORITES -> Icons.Outlined.StarOutline
         SmartList.ARCHIVE -> Icons.Outlined.Archive
         SmartList.TRASH -> Icons.Outlined.Delete
+        SmartList.WEAK -> Icons.Outlined.LockOpen
+        SmartList.REUSED -> Icons.Outlined.Repeat
+        SmartList.BREACHED -> Icons.Outlined.GppBad
         else -> Icons.Outlined.Inventory2
     }
 

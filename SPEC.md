@@ -289,3 +289,26 @@ Raise any of these and they change.
 - Generator options are stored in plain DataStore outside the vault: they describe a
   policy, not a secret
 - The editor offers the generator on password fields only
+- The audit treats `password` and card transaction-password fields as passwords. PINs sit
+  out weak, breached, reused and stale until the deferred trivial-PIN check exists: every
+  four-digit PIN would otherwise be flagged, and an audit that flags everything is ignored
+- Archived items are left out of the report and the health score; trashed items never
+  count as a second use of a password
+- Health score: each audited item starts at 100 and loses breached 100, reused 60, weak 50,
+  stale 15, insecure website 15, missing 2FA 10 — each kind once per item, floored at 0.
+  The vault score is the average. A vault with nothing to audit has no score, not 100
+- `http://` websites on local hosts (localhost, private IPv4 ranges, `.local`, `.lan`,
+  `.internal`, `.home.arpa`) are not flagged: there is no https to switch them to
+- Missing 2FA applies to logins with a website only, and cannot be dismissed yet
+- "Use https" applies in one tap, as an ordinary edit, so it shows in the item and can be
+  edited back
+- Websites marked sensitive skip the URL checks, since reading them would mean decrypting
+- The offline breach list is SecLists' `xato-net-10-million-passwords-1000000.txt` at
+  commit `c205c36a445bff37f8e58a9ec829105cd4975c58` (MIT; SHA-256 `424a3e03…af51`),
+  built into a 1.8MB Bloom filter at 0.1% false positives by
+  `./gradlew :core:domain:buildBreachFilter -Pinput=<list> -Psha256=<hash>`
+- The online check runs only for passwords not checked since they last changed, so an
+  unchanged vault makes no requests even with it on. A failure leaves offline results in
+  place, and an online miss never clears an offline hit
+- Cached audit results record the rules version that produced them; a build that changes
+  the rules or the breach list rescores the whole vault

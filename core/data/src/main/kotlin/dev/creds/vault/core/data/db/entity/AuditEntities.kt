@@ -48,11 +48,14 @@ internal data class ItemAssociationEntity(
 )
 
 /**
- * Cached strength score for one field.
+ * Cached audit results for one field: strength and breach status.
  *
  * Separate from `fields` because scoring is expensive and its inputs change on a
  * different cadence than the field itself — a new zxcvbn version rescores the whole
  * vault without touching a single value.
+ *
+ * A row is current while [checkedAt] is not older than the field's `value_updated_at`;
+ * a stale row is ignored by every query rather than trusted.
  */
 @Entity(
     tableName = "audit_scores",
@@ -80,4 +83,16 @@ internal data class AuditScoreEntity(
 
     @ColumnInfo(name = "checked_at")
     val checkedAt: Long,
+
+    /** In the offline list, or seen by Have I Been Pwned. Added in schema 3. */
+    @ColumnInfo(name = "breached", defaultValue = "0")
+    val breached: Boolean = false,
+
+    /** Have I Been Pwned's count; null until checked online. Added in schema 3. */
+    @ColumnInfo(name = "breach_count")
+    val breachCount: Int? = null,
+
+    /** When the online check last ran for this value; null if never. Added in schema 3. */
+    @ColumnInfo(name = "online_checked_at")
+    val onlineCheckedAt: Long? = null,
 )
