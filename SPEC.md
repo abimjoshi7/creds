@@ -266,3 +266,12 @@ Raise any of these and they change.
   in the database and indexed, so "•••• 1234" is deliberately not offered
 - Debug builds carry an "Add sample items" action with invented data; release builds
   compile a stub
+- Tapping an item opens a read-only view; editing is a separate, explicit step. Secrets
+  there start masked behind a fixed-width mask that does not reveal their length
+- Every copied value, secret or not, is marked sensitive and cleared after 30s. The clear
+  is best effort: it is lost if the process dies first, and when Android will not let a
+  backgrounded app read the clipboard it clears without checking the clip is still ours
+- Field history is kept for sensitive fields only and is read from the item view
+- Locking discards an unsaved edit: a draft is plaintext, and it does not outlive the vault
+- Any item can gain or lose fields beyond its template's defaults; removed fields are
+  tombstoned with their history, and imported section headings are kept

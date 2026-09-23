@@ -23,6 +23,7 @@ import dev.creds.vault.core.model.VaultItem
 import dev.creds.vault.core.model.VaultItemSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /**
@@ -134,6 +135,23 @@ class VaultRepository internal constructor(
 
     suspend fun fieldHistoryCount(fieldUid: Long): Int =
         if (fieldUid == 0L) 0 else fieldHistoryDao.countForField(fieldUid)
+
+    /**
+     * Signals when an open item needs re-reading.
+     *
+     * Emits true each time the item, its fields, its tags, or the name or colour of any
+     * tag may have changed, and false once the item no longer exists. It carries no
+     * content on purpose: the caller re-reads with [load] under its own unlocked check,
+     * so no vault key has to live inside a long-running flow.
+     */
+    fun observeItemChanges(uuid: String): Flow<Boolean> =
+        combine(itemDao.observeUpdatedAt(uuid), tagDao.observeAll()) { updatedAt, tags ->
+            updatedAt to tags
+        }
+            // Room re-runs both queries on any write to their tables, including writes to
+            // other items. Only a change that could alter this item gets through.
+            .distinctUntilChanged()
+            .map { (updatedAt, _) -> updatedAt != null }
 
     /**
      * Full-text search.

@@ -44,10 +44,12 @@ object TotpTags {
 fun TotpCodePanel(
     secret: String,
     modifier: Modifier = Modifier,
+    onCopy: ((label: String, value: String) -> Unit)? = null,
 ) {
     val spec = remember(secret) { Totp.parse(secret) } ?: return
     var code by remember(spec) { mutableStateOf(Totp.generate(spec)) }
-    val copy = rememberCopySensitive()
+    val defaultCopy = rememberCopySensitive()
+    val copy = onCopy ?: defaultCopy
 
     LaunchedEffect(spec) {
         while (isActive) {

@@ -34,6 +34,15 @@ internal interface ItemDao {
     @Query("SELECT * FROM items WHERE uuid = :uuid")
     suspend fun byUuid(uuid: String): ItemEntity?
 
+    /**
+     * The item's `updated_at`, or null once the row is gone.
+     *
+     * Every write to an item or its fields bumps this column in the same transaction, so
+     * it doubles as a change signal that carries no content.
+     */
+    @Query("SELECT updated_at FROM items WHERE uuid = :uuid")
+    fun observeUpdatedAt(uuid: String): Flow<Long?>
+
     @Query("SELECT * FROM items WHERE uuid IN (:uuids)")
     suspend fun byUuids(uuids: List<String>): List<ItemEntity>
 
