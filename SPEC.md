@@ -237,6 +237,24 @@ out:  .vault         Argon2id + AES-256-GCM, the default and only one-tap option
 Import parses in memory, dedupes by (title, username), previews a diff, then commits.
 No intermediate plaintext file ever touches disk.
 
+### The `.vault` format
+
+```
+header  "VAULTESQ" · format u8 (1) · kdf u8 (1 = Argon2id) · m u32 · t u32 · p u32 · salt[16]
+record  flags u8 (bit 0 = last) · length u32 · AES-256-GCM blob   (repeated)
+
+file key = HKDF-SHA256(Argon2id(backup password, salt, m, t, p), info "export")
+record i AAD = header ‖ i (u32) ‖ flags
+record 0 = JSON manifest (items, fields, history, tags, trusted apps and sites,
+           attachment metadata); records 1..n = one attachment's bytes each
+```
+
+Every record is bound to its file and its position, and only the final record carries
+the last flag, so tampering, reordering, splicing between files and truncation all fail
+to open. Records rather than one sealed payload so a vault with many attachments is
+written and read one file at a time. The KDF parameters travel in the header, so they can
+be raised later without breaking old backups.
+
 `backup.json` in this repo — 16 items, 5 categories, 45 text and 21 section fields,
 9 TOTP fields, 3 bank accounts carrying card fields — is the v1 import acceptance test.
 (The TOTP fields and card numbers are empty template slots in this export; what is
@@ -363,12 +381,23 @@ Raise any of these and they change.
   become tags, matched to existing ones ignoring case and shortened to 32 characters
 - The export is read from the document provider into memory and never copied to a file;
   the preview is dropped when the import finishes, is cancelled, or the vault locks
-- CSV import and `.vault` / `.json` / `.csv` export from §11 are not in any build
-  checkpoint and remain unbuilt
+- CSV import and plaintext `.json` / `.csv` export from §11 remain unbuilt
+- A `.vault` backup has its own password, not the master password, held to the master
+  password's floor (10 characters, zxcvbn score ≥ 2): the file is the whole vault, and a
+  leaked backup must not also reveal the master password
+- A backup holds every item, archived and trashed included, with fields, field history,
+  tags and their colours, trusted apps and sites, and attachments. Not included:
+  soft-deleted fields, generator history, cached audit scores, and settings
+- Importing a backup goes through the same preview, dedupe and single transaction as the
+  Enpass import; attachments are streamed from the file a second time as it is written.
+  The file key is kept between the preview and the write so Argon2id runs once, and is
+  wiped when the import finishes, is cancelled, or the vault locks
+- A backup that fails part-way is deleted from where it was being saved, when the
+  document provider allows it
 - Attachments: at most 5 MB each, any type. Images and text preview in-app from memory;
   every other type can only leave as an explicit "Save a copy" to a user-chosen location,
   after a plaintext warning. No "open with" — handing a file to another app would need a
   plaintext file on disk. Attachment names are sealed and not searchable. The `.vault`
-  export must carry attachments when it is built; plaintext `.json`/`.csv` exports omit them
+  export carries attachments; plaintext `.json`/`.csv` exports, when built, will omit them
 - Files picked in the editor are held in memory, unencrypted, until the item is saved,
   the same as field values being edited, and a lock discards them with the rest of the draft

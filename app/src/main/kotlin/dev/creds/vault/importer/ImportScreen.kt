@@ -43,6 +43,7 @@ import dev.creds.vault.core.domain.importer.ImportStatus
 import dev.creds.vault.core.domain.importer.ImportWarnings
 import dev.creds.vault.core.domain.template.TemplateCatalog
 import dev.creds.vault.core.ui.components.QuietPanel
+import dev.creds.vault.ui.PasswordField
 
 object ImportTags {
     const val CHOOSE = "import:choose"
@@ -51,6 +52,9 @@ object ImportTags {
     const val WARNINGS = "import:warnings"
     const val ERROR = "import:error"
     const val DONE = "import:done"
+    const val PASSWORD = "import:password"
+    const val PASSWORD_REVEAL = "import:password:reveal"
+    const val OPEN = "import:open"
     fun row(index: Int) = "import:row:$index"
 }
 
@@ -60,6 +64,8 @@ data class ImportActions(
     val onToggle: (Int) -> Unit = {},
     val onCommit: () -> Unit = {},
     val onReset: () -> Unit = {},
+    val onBackupPasswordChange: (String) -> Unit = {},
+    val onOpenBackup: () -> Unit = {},
 )
 
 @Composable
@@ -80,6 +86,8 @@ fun ImportRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: Im
             onToggle = viewModel::toggle,
             onCommit = viewModel::commit,
             onReset = viewModel::reset,
+            onBackupPasswordChange = viewModel::onBackupPasswordChange,
+            onOpenBackup = viewModel::openBackup,
         ),
         modifier = modifier,
     )
@@ -94,7 +102,7 @@ fun ImportScreen(state: ImportUiState, actions: ImportActions, modifier: Modifie
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                title = { Text("Import from Enpass") },
+                title = { Text("Import") },
                 navigationIcon = {
                     IconButton(onClick = actions.onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }
                 },
@@ -107,6 +115,7 @@ fun ImportScreen(state: ImportUiState, actions: ImportActions, modifier: Modifie
             ImportStage.READING, ImportStage.IMPORTING -> Box(content, contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
+            ImportStage.PASSWORD -> PasswordStage(state, actions, content)
             ImportStage.PREVIEW -> PreviewStage(state, actions, content)
             ImportStage.DONE -> Column(
                 content.padding(24.dp).testTag(ImportTags.DONE),
@@ -117,7 +126,10 @@ fun ImportScreen(state: ImportUiState, actions: ImportActions, modifier: Modifie
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    "Delete the Enpass export file now. It holds every password in plain text.",
+                    when (state.source) {
+                        ImportSource.ENPASS -> "Delete the Enpass export file now. It holds every password in plain text."
+                        ImportSource.BACKUP -> "The backup file is still encrypted. Keep it as a backup, or delete it."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Button(onClick = actions.onBack, shape = MaterialTheme.shapes.medium) { Text("Done") }
@@ -130,7 +142,7 @@ fun ImportScreen(state: ImportUiState, actions: ImportActions, modifier: Modifie
 private fun ChooseStage(state: ImportUiState, actions: ImportActions, modifier: Modifier) {
     Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            "In Enpass, export your vault as JSON, then choose the file here. You'll see what will be imported before anything is saved.",
+            "Choose a Vaultesque backup (.vault), or an Enpass export saved as JSON. You'll see what will be imported before anything is saved.",
             style = MaterialTheme.typography.bodyLarge,
         )
         Text(
@@ -145,7 +157,40 @@ private fun ChooseStage(state: ImportUiState, actions: ImportActions, modifier: 
             onClick = actions.onChoose,
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth().testTag(ImportTags.CHOOSE),
-        ) { Text("Choose export file") }
+        ) { Text("Choose file") }
+    }
+}
+
+@Composable
+private fun PasswordStage(state: ImportUiState, actions: ImportActions, modifier: Modifier) {
+    Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("This is a Vaultesque backup.", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Enter the password it was exported with. It is not necessarily your master password.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PasswordField(
+            value = state.backupPassword,
+            onValueChange = actions.onBackupPasswordChange,
+            label = "Backup password",
+            fieldTag = ImportTags.PASSWORD,
+            revealTag = ImportTags.PASSWORD_REVEAL,
+            isError = state.error != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        state.error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag(ImportTags.ERROR))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = actions.onReset) { Text("Cancel") }
+            Button(
+                onClick = actions.onOpenBackup,
+                enabled = state.backupPassword.isNotEmpty(),
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.weight(1f).testTag(ImportTags.OPEN),
+            ) { Text("Open backup") }
+        }
     }
 }
 
@@ -158,6 +203,7 @@ private fun PreviewStage(state: ImportUiState, actions: ImportActions, modifier:
                     buildString {
                         append(if (state.newCount == 1) "1 new item" else "${state.newCount} new items")
                         if (state.duplicateCount > 0) append(" · ${state.duplicateCount} already in your vault")
+                        if (state.attachmentCount > 0) append(if (state.attachmentCount == 1) " · 1 file" else " · ${state.attachmentCount} files")
                     },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp).testTag(ImportTags.SUMMARY),

@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import dev.creds.vault.audit.AuditRoute
+import dev.creds.vault.backup.ExportRoute
 import dev.creds.vault.autofill.AutofillSettingsRoute
 import dev.creds.vault.generator.GeneratorRoute
 import dev.creds.vault.importer.ImportRoute
@@ -33,6 +34,9 @@ data object AutofillSettingsDestination
 
 @Serializable
 data object ImportDestination
+
+@Serializable
+data object ExportDestination
 
 @Serializable
 data class ItemDetailDestination(val uuid: String)
@@ -70,6 +74,7 @@ fun VaultNavHost(
                 onOpenAudit = { navController.navigate(AuditDestination) { launchSingleTop = true } },
                 onOpenAutofill = { navController.navigate(AutofillSettingsDestination) { launchSingleTop = true } },
                 onImport = { navController.navigate(ImportDestination) { launchSingleTop = true } },
+                onExport = { navController.navigate(ExportDestination) { launchSingleTop = true } },
                 onOpenItem = { uuid ->
                     navController.navigate(ItemDetailDestination(uuid)) { launchSingleTop = true }
                 },
@@ -87,6 +92,9 @@ fun VaultNavHost(
         }
         composable<ImportDestination> {
             ImportRoute(onBack = { navController.popBackStack() })
+        }
+        composable<ExportDestination> {
+            ExportRoute(onBack = { navController.popBackStack() })
         }
         composable<AutofillSettingsDestination> {
             AutofillSettingsRoute(onBack = { navController.popBackStack() })

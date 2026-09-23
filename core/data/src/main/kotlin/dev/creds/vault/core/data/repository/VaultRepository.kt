@@ -19,6 +19,8 @@ import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
 import dev.creds.vault.core.domain.autofill.AutofillCandidate
 import dev.creds.vault.core.domain.importer.ExistingItemKey
+import dev.creds.vault.core.domain.importer.ImportAttachmentSource
+import dev.creds.vault.core.domain.importer.ImportedAttachment
 import dev.creds.vault.core.domain.importer.ImportPlanner
 import dev.creds.vault.core.domain.importer.ImportedItem
 import dev.creds.vault.core.domain.tag.TagNameCheck
@@ -42,6 +44,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * The module's write path.
@@ -473,42 +476,94 @@ class VaultRepository internal constructor(
      * disk — leaves the vault exactly as it was, rather than half an Enpass vault to untangle
      * by hand. Tags are matched to existing ones by name, ignoring case, and created only
      * when missing. Imported history is sealed like any other and attached to its field.
+     *
+     * Attachments come from [attachments], one file at a time, inside the same
+     * transaction. Their files are written as they arrive, so on failure the ones already
+     * written are deleted as the transaction rolls back. Bytes for items not in [items]
+     * — unticked in the preview — are skipped.
      */
-    suspend fun importItems(vaultKey: VaultKey, items: List<ImportedItem>) {
-        database.withTransaction {
-            val tagsByName = HashMap<String, Tag>()
-            tagDao.all().forEach { tagsByName[TagNames.foldCase(it.name)] = it.toModel() }
+    suspend fun importItems(
+        vaultKey: VaultKey,
+        items: List<ImportedItem>,
+        attachments: ImportAttachmentSource? = null,
+    ) {
+        val written = mutableListOf<String>()
+        try {
+            database.withTransaction {
+                val tagsByName = HashMap<String, Tag>()
+                tagDao.all().forEach { tagsByName[TagNames.foldCase(it.name)] = it.toModel() }
 
-            for (imported in items) {
-                val tags = imported.tagNames.mapNotNull { raw ->
-                    // Enpass allows longer folder names; shortened rather than dropped.
-                    val name = TagNames.coerce(raw) ?: return@mapNotNull null
-                    tagsByName.getOrPut(TagNames.foldCase(name)) {
-                        val entity = TagEntity(name = name, color = null)
-                        entity.copy(id = tagDao.insert(entity)).toModel()
-                    }
-                }.distinctBy { it.id }
+                for (imported in items) {
+                    val tags = imported.tagNames.mapNotNull { raw ->
+                        // Enpass allows longer folder names; shortened rather than dropped.
+                        val name = TagNames.coerce(raw) ?: return@mapNotNull null
+                        tagsByName.getOrPut(TagNames.foldCase(name)) {
+                            val entity = TagEntity(name = name, color = imported.tagColors[raw])
+                            entity.copy(id = tagDao.insert(entity)).toModel()
+                        }
+                    }.distinctBy { it.id }
 
-                val item = imported.item
-                save(vaultKey, item, tags)
-                if (imported.history.isEmpty()) continue
+                    val item = imported.item
+                    save(vaultKey, item, tags)
 
-                val savedFields = fieldDao.forItem(item.uuid).sortedBy { it.ord }
-                for ((index, entries) in imported.history) {
-                    val field = savedFields.getOrNull(index) ?: continue
-                    entries.forEach { entry ->
-                        fieldHistoryDao.insert(
-                            FieldHistoryEntity(
-                                fieldUid = field.uid,
-                                valueEnc = fieldCipher.sealValue(vaultKey, item.uuid, field.type, entry.value),
-                                replacedAt = entry.replacedAt,
+                    imported.associations.forEach { association ->
+                        associationDao.upsert(
+                            ItemAssociationEntity(
+                                itemUuid = item.uuid,
+                                kind = association.kind.id,
+                                value = association.value,
+                                certSha256 = association.certSha256,
+                                confirmedAt = association.confirmedAt,
                             ),
                         )
                     }
+
+                    if (imported.history.isEmpty()) continue
+                    val savedFields = fieldDao.forItem(item.uuid).sortedBy { it.ord }
+                    for ((index, entries) in imported.history) {
+                        val field = savedFields.getOrNull(index) ?: continue
+                        entries.forEach { entry ->
+                            fieldHistoryDao.insert(
+                                FieldHistoryEntity(
+                                    fieldUid = field.uid,
+                                    valueEnc = fieldCipher.sealValue(vaultKey, item.uuid, field.type, entry.value),
+                                    replacedAt = entry.replacedAt,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                if (attachments == null) return@withTransaction
+                val bySource = HashMap<String, Pair<ImportedItem, ImportedAttachment>>()
+                items.forEach { imported -> imported.attachments.forEach { bySource[it.sourceId] = imported to it } }
+                if (bySource.isEmpty()) return@withTransaction
+
+                attachments.forEach { sourceId, bytes ->
+                    val (imported, meta) = bySource[sourceId] ?: return@forEach
+                    val new = NewAttachment(
+                        id = UUID.randomUUID().toString(),
+                        name = meta.name,
+                        mimeType = meta.mimeType,
+                        bytes = bytes,
+                        createdAt = meta.createdAt,
+                    )
+                    // File work only off the transaction thread; the insert stays on it.
+                    val row = withContext(Dispatchers.IO) {
+                        writeAttachment(vaultKey, imported.item.uuid, new, imported.item.updatedAt)
+                    }
+                    written += new.id
+                    attachmentDao.insert(row)
                 }
             }
+        } catch (e: Throwable) {
+            withContext(Dispatchers.IO + NonCancellable) { written.forEach(attachmentStore::delete) }
+            throw e
         }
     }
+
+    /** Every item's uuid, trashed and archived included, for a full backup. */
+    internal suspend fun allItemUuids(): List<String> = itemDao.allUuids()
 
     /**
      * Live items as autofill matching sees them: titles, websites and confirmed

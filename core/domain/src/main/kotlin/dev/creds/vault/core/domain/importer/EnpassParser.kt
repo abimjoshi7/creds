@@ -3,6 +3,7 @@ package dev.creds.vault.core.domain.importer
 import dev.creds.vault.core.domain.template.TemplateCatalog
 import dev.creds.vault.core.model.FieldHistoryEntry
 import dev.creds.vault.core.model.FieldType
+import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.Template
 import dev.creds.vault.core.model.VaultField
 import dev.creds.vault.core.model.VaultItem
@@ -22,7 +23,33 @@ data class ImportedItem(
     /** Previous values by index into [VaultItem.fields], newest first. */
     val history: Map<Int, List<FieldHistoryEntry>> = emptyMap(),
     val tagNames: List<String> = emptyList(),
+    /** Colours for tags the import creates, by tag name. Existing tags keep theirs. */
+    val tagColors: Map<String, Int> = emptyMap(),
+    /** Apps and sites this item was confirmed to autofill, trust carried over as it was. */
+    val associations: List<ItemAssociation> = emptyList(),
+    /** Files whose bytes an [ImportAttachmentSource] supplies when the import is written. */
+    val attachments: List<ImportedAttachment> = emptyList(),
 )
+
+/** A file to attach to an imported item. [sourceId] is how the source names its bytes. */
+data class ImportedAttachment(
+    val sourceId: String,
+    val name: String,
+    val mimeType: String,
+    val size: Long,
+    val createdAt: Long,
+)
+
+/**
+ * Supplies attachment bytes while an import is written, one file at a time, so a whole
+ * backup's files never sit in memory together.
+ *
+ * Calls [block] once per file, in any order, with plaintext the source owns and wipes
+ * after [block] returns. Throwing aborts the import.
+ */
+fun interface ImportAttachmentSource {
+    suspend fun forEach(block: suspend (sourceId: String, bytes: ByteArray) -> Unit)
+}
 
 /** What an import could not carry over, so the preview can say so before anything is written. */
 data class ImportWarnings(
