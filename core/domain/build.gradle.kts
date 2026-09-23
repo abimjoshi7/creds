@@ -20,7 +20,12 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-tasks.withType<Test>().configureEach { useJUnitPlatform() }
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    // The v1 import acceptance test reads the real Enpass export in place, if present.
+    // It is live credential data: never copied, and the test asserts on counts only.
+    systemProperty("creds.backupJson", rootProject.file("backup.json").absolutePath)
+}
 
 // Build-time tooling that is never part of the module's output. See BuildBreachFilter.kt.
 val tools: SourceSet by sourceSets.creating {

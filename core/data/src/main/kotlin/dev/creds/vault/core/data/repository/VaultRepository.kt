@@ -16,6 +16,9 @@ import dev.creds.vault.core.data.db.entity.ItemEntity
 import dev.creds.vault.core.data.db.entity.ItemTagCrossRef
 import dev.creds.vault.core.data.db.entity.TagEntity
 import dev.creds.vault.core.domain.autofill.AutofillCandidate
+import dev.creds.vault.core.domain.importer.ExistingItemKey
+import dev.creds.vault.core.domain.importer.ImportPlanner
+import dev.creds.vault.core.domain.importer.ImportedItem
 import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
 import dev.creds.vault.core.domain.template.TemplateCatalog
@@ -350,6 +353,58 @@ class VaultRepository internal constructor(
             tagDao.unlinkAll(uuid)
             if (tagIds.isNotEmpty()) tagDao.link(tagIds.map { ItemTagCrossRef(uuid, it) })
             itemDao.touch(uuid, now)
+        }
+    }
+
+    /**
+     * Every item in the vault, trash and archive included, as import deduplication sees it.
+     * Decrypts usernames, so it needs the key.
+     */
+    suspend fun importKeys(vaultKey: VaultKey): List<ExistingItemKey> =
+        itemDao.allUuids().mapNotNull { uuid -> load(vaultKey, uuid) }
+            .map { ExistingItemKey(it.uuid, it.title, ImportPlanner.usernameOf(it)) }
+
+    /**
+     * Writes an import, all or nothing.
+     *
+     * One transaction for the whole batch: an import that fails part-way — a lock, a full
+     * disk — leaves the vault exactly as it was, rather than half an Enpass vault to untangle
+     * by hand. Tags are matched to existing ones by name, ignoring case, and created only
+     * when missing. Imported history is sealed like any other and attached to its field.
+     */
+    suspend fun importItems(vaultKey: VaultKey, items: List<ImportedItem>) {
+        database.withTransaction {
+            val tagsByName = HashMap<String, Tag>()
+            tagDao.all().forEach { tagsByName[TagNames.foldCase(it.name)] = it.toModel() }
+
+            for (imported in items) {
+                val tags = imported.tagNames.mapNotNull { raw ->
+                    // Enpass allows longer folder names; shortened rather than dropped.
+                    val name = TagNames.coerce(raw) ?: return@mapNotNull null
+                    tagsByName.getOrPut(TagNames.foldCase(name)) {
+                        val entity = TagEntity(name = name, color = null)
+                        entity.copy(id = tagDao.insert(entity)).toModel()
+                    }
+                }.distinctBy { it.id }
+
+                val item = imported.item
+                save(vaultKey, item, tags)
+                if (imported.history.isEmpty()) continue
+
+                val savedFields = fieldDao.forItem(item.uuid).sortedBy { it.ord }
+                for ((index, entries) in imported.history) {
+                    val field = savedFields.getOrNull(index) ?: continue
+                    entries.forEach { entry ->
+                        fieldHistoryDao.insert(
+                            FieldHistoryEntity(
+                                fieldUid = field.uid,
+                                valueEnc = fieldCipher.sealValue(vaultKey, item.uuid, field.type, entry.value),
+                                replacedAt = entry.replacedAt,
+                            ),
+                        )
+                    }
+                }
+            }
         }
     }
 

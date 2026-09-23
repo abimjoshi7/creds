@@ -61,4 +61,12 @@ class TagNamesTest {
         // SQLite's NOCASE would call these different.
         assertThat(TagNames.sameName("Über", "über")).isTrue()
     }
+
+    @Test
+    fun `fold case agrees with sameName and coerce shortens without dropping`() {
+        assertThat(TagNames.foldCase("#Über ")).isEqualTo(TagNames.foldCase("über"))
+        assertThat(TagNames.coerce("  ")).isEqualTo(null)
+        assertThat(TagNames.coerce("a".repeat(40))).isEqualTo("a".repeat(TagNames.MAX_LENGTH))
+        assertThat(TagNames.coerce("#Work")).isEqualTo("Work")
+    }
 }

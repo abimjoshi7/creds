@@ -77,6 +77,9 @@ internal interface ItemDao {
     )
     suspend fun touchTagged(tagId: Long, now: Long)
 
+    @Query("SELECT uuid FROM items")
+    suspend fun allUuids(): List<String>
+
     @Query("SELECT uuid FROM items WHERE trashed = 1")
     suspend fun trashedUuids(): List<String>
 

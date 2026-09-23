@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Lock
@@ -152,6 +153,7 @@ data class VaultListActions(
     val onOpenGenerator: () -> Unit = {},
     val onOpenAudit: () -> Unit = {},
     val onOpenAutofill: () -> Unit = {},
+    val onImport: () -> Unit = {},
     val onOpenItem: (VaultItemSummary) -> Unit = {},
     val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
@@ -164,6 +166,7 @@ fun VaultListRoute(
     onOpenGenerator: () -> Unit,
     onOpenAudit: () -> Unit,
     onOpenAutofill: () -> Unit,
+    onImport: () -> Unit,
     onOpenItem: (String) -> Unit,
     onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
@@ -225,6 +228,7 @@ fun VaultListRoute(
             onOpenGenerator = onOpenGenerator,
             onOpenAudit = onOpenAudit,
             onOpenAutofill = onOpenAutofill,
+            onImport = onImport,
             onOpenItem = { onOpenItem(it.uuid) },
             onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
@@ -322,6 +326,7 @@ fun VaultListScreen(
                     onEmptyTrash = { confirmEmptyTrash = true },
                     onManageTags = actions.onManageTags,
                     onOpenGenerator = actions.onOpenGenerator,
+                    onImport = actions.onImport,
                     onAddSamples = actions.onAddSamples,
                 )
             },
@@ -412,6 +417,7 @@ private fun SearchTopBar(
     onEmptyTrash: () -> Unit,
     onManageTags: () -> Unit,
     onOpenGenerator: () -> Unit,
+    onImport: () -> Unit,
     onAddSamples: (() -> Unit)?,
 ) {
     var overflow by remember { mutableStateOf(false) }
@@ -493,6 +499,15 @@ private fun SearchTopBar(
                         onClick = {
                             overflow = false
                             onOpenGenerator()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Import from Enpass") },
+                        modifier = Modifier.testTag(VaultListTags.menu("import")),
+                        leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
+                        onClick = {
+                            overflow = false
+                            onImport()
                         },
                     )
                     DropdownMenuItem(
@@ -975,6 +990,7 @@ private fun EmptyState(state: VaultListUiState, actions: VaultListActions) {
         }
         if (state.counts.total == 0) {
             TextButton(onClick = actions.onAddItem) { Text("Add item") }
+            TextButton(onClick = actions.onImport) { Text("Import from Enpass") }
             actions.onAddSamples?.let { TextButton(onClick = it) { Text("Add sample items (debug)") } }
         }
     }

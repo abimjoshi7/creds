@@ -48,4 +48,15 @@ object TagNames {
      */
     fun sameName(a: String, b: String): Boolean =
         normalize(a).equals(normalize(b), ignoreCase = true)
+
+    /** A map key that agrees with [sameName]: two names share it exactly when they are the same tag. */
+    fun foldCase(name: String): String = normalize(name).uppercase().lowercase()
+
+    /** [raw] as a valid name, shortened to [MAX_LENGTH] code points if needed; null if blank. */
+    fun coerce(raw: String): String? {
+        val name = normalize(raw)
+        if (name.isEmpty()) return null
+        val count = name.codePointCount(0, name.length)
+        return if (count <= MAX_LENGTH) name else name.substring(0, name.offsetByCodePoints(0, MAX_LENGTH)).trimEnd()
+    }
 }

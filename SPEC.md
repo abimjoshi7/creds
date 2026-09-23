@@ -227,7 +227,9 @@ Import parses in memory, dedupes by (title, username), previews a diff, then com
 No intermediate plaintext file ever touches disk.
 
 `backup.json` in this repo — 16 items, 5 categories, 45 text and 21 section fields,
-9 TOTP secrets, 3 payment cards — is the v1 import acceptance test.
+9 TOTP fields, 3 bank accounts carrying card fields — is the v1 import acceptance test.
+(The TOTP fields and card numbers are empty template slots in this export; what is
+asserted is that every field comes across, filled or not, along with 38 history entries.)
 
 ## 12. Build checkpoints
 
@@ -330,3 +332,21 @@ Raise any of these and they change.
 - PIN-type fields and new-password fields are never filled; a new password is what gets
   offered for saving
 - Trusted apps and sites are listed on the item and can be removed there
+- The Enpass import keeps every field, empty template slots and section headings included,
+  in Enpass order; deleted fields, attachments, icons and history Enpass stored encrypted
+  are left out, and the preview says so before anything is written
+- Imported sensitivity is only raised (Enpass does not mark TOTP seeds sensitive; Creds
+  does), and subtitles are recomputed from non-sensitive fields rather than taken from
+  the file
+- Enpass's "other" templates in any category import as Other; bank accounts keep their
+  card fields under the Bank account template
+- Duplicates match title and username, trimmed and ignoring case, against everything in
+  the vault including trash and archive, and against earlier items in the same file. They
+  are listed unticked, not hidden. An item whose uuid is taken gets a new one, so an import
+  never overwrites
+- An import is one transaction: a lock or failure part-way writes nothing. Enpass folders
+  become tags, matched to existing ones ignoring case and shortened to 32 characters
+- The export is read from the document provider into memory and never copied to a file;
+  the preview is dropped when the import finishes, is cancelled, or the vault locks
+- CSV import and `.vault` / `.json` / `.csv` export from §11 are not in any build
+  checkpoint and remain unbuilt
