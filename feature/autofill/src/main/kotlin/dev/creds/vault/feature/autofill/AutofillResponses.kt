@@ -42,7 +42,7 @@ object AutofillResponses {
 
     private const val MAX_DATASETS = 20
 
-    /** Locked: a single "Unlock Creds" entry that authenticates the whole response. */
+    /** Locked: a single "Unlock Vaultesque" entry that authenticates the whole response. */
     fun locked(context: Context, analysis: AutofillAnalysis, inline: InlineSuggestionsRequest?): FillResponse {
         val title = context.getString(R.string.autofill_unlock)
         val builder = FillResponse.Builder()
@@ -60,7 +60,7 @@ object AutofillResponses {
 
     /**
      * Unlocked: a suggestion per item trusted for this app or site (and every card or
-     * identity, for those forms), then "Search Creds…" for everything else. Null when there
+     * identity, for those forms), then "Search Vaultesque…" for everything else. Null when there
      * is nothing to show and nothing to save.
      */
     suspend fun unlocked(
@@ -80,7 +80,7 @@ object AutofillResponses {
 
         val builder = FillResponse.Builder()
         var added = 0
-        // One inline slot is kept for "Search Creds…".
+        // One inline slot is kept for "Search Vaultesque…".
         val inlineSlots = if (inline != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) inline.maxSuggestionCount - 1 else 0
         offered.forEachIndexed { index, item ->
             val inlineAllowed = index < inlineSlots

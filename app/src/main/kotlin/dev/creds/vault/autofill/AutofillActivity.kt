@@ -149,8 +149,8 @@ class AutofillActivity : FragmentActivity() {
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Creds isn't set up yet", style = MaterialTheme.typography.titleMedium)
-                Text("Open Creds and create your vault first.", style = MaterialTheme.typography.bodyMedium)
+                Text("Vaultesque isn't set up yet", style = MaterialTheme.typography.titleMedium)
+                Text("Open Vaultesque and create your vault first.", style = MaterialTheme.typography.bodyMedium)
                 Button(onClick = ::finish) { Text("Close") }
             }
         }

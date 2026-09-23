@@ -13,7 +13,7 @@ android {
     compileSdkMinor = libs.versions.compileSdkMinor.get().toInt()
 
     defaultConfig {
-        applicationId = "dev.creds.vault"
+        applicationId = "com.abimatwork.vaultesque"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1

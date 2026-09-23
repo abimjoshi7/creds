@@ -33,7 +33,7 @@ class UnlockScreenTest {
     fun rendersTheUnlockScreen() {
         setContent(UnlockUiState())
 
-        compose.onNodeWithText("Creds").assertIsDisplayed()
+        compose.onNodeWithText("Vaultesque").assertIsDisplayed()
         compose.onNodeWithTag(UnlockTags.PASSWORD).assertIsDisplayed()
         compose.onNodeWithTag(UnlockTags.SUBMIT).assertIsDisplayed()
     }

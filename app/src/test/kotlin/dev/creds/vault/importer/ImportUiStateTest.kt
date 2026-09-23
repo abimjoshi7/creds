@@ -35,7 +35,7 @@ class ImportUiStateTest {
             warningLines(ImportWarnings(encryptedHistorySkipped = 2, attachmentsSkipped = 1, unknownFieldTypes = setOf("x", "y"))),
         ).containsExactly(
             "2 previous values Enpass kept encrypted can't be imported.",
-            "1 attachments are not imported; Creds does not store files.",
+            "1 attachments are not imported; add them to their items afterwards.",
             "Unfamiliar field types (x, y) are imported as text.",
         )
     }

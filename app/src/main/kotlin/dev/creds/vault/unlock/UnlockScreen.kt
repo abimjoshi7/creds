@@ -66,7 +66,7 @@ fun UnlockRoute(
                 val cipher = viewModel.biometricCipher() ?: return@launch
                 val authorised = prompt.authenticate(
                     cipher = cipher,
-                    title = "Unlock Creds",
+                    title = "Unlock Vaultesque",
                     subtitle = "Use your fingerprint to open the vault",
                 ) ?: return@launch
                 viewModel.unlockWithBiometric(authorised, onUnlocked)
@@ -93,7 +93,7 @@ fun UnlockScreen(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Creds",
+                "Vaultesque",
                 style = MaterialTheme.typography.displaySmall,
                 color = MaterialTheme.colorScheme.onBackground,
             )

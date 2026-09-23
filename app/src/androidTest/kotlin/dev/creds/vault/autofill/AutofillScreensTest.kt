@@ -66,7 +66,7 @@ class AutofillScreensTest {
     fun confirmingASiteNamesTheSite() {
         setPicker(AutofillPickerUiState(originName = "bank.com", isWeb = true, rows = listOf(unconfirmed), confirm = unconfirmed))
 
-        compose.onNode(hasText("Creds will remember bank.com for this item", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("Vaultesque will remember bank.com for this item", substring = true)).assertIsDisplayed()
     }
 
     @Test

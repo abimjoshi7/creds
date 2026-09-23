@@ -94,8 +94,8 @@ fun AutofillSettingsScreen(
         ) {
             Text(
                 when (status) {
-                    AutofillStatus.ENABLED -> "Creds is your autofill service."
-                    AutofillStatus.DISABLED -> "Creds is not your autofill service."
+                    AutofillStatus.ENABLED -> "Vaultesque is your autofill service."
+                    AutofillStatus.DISABLED -> "Vaultesque is not your autofill service."
                     AutofillStatus.UNSUPPORTED -> "This device does not support autofill services."
                 },
                 style = MaterialTheme.typography.titleMedium,
@@ -106,17 +106,17 @@ fun AutofillSettingsScreen(
                     onClick = onEnable,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth().testTag(AutofillSettingsTags.ENABLE),
-                ) { Text("Use Creds for autofill") }
+                ) { Text("Use Vaultesque for autofill") }
             }
             QuietPanel {
-                Text("How Creds decides what to fill", style = MaterialTheme.typography.titleSmall)
+                Text("How Vaultesque decides what to fill", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Websites: only in browsers Creds can verify, and only items saved for that site. " +
+                    "Websites: only in browsers Vaultesque can verify, and only items saved for that site. " +
                         "login.bank.com and bank.com are the same site; bank.com.evil.co is not.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    "Apps: the first time you fill an item in an app, Creds asks, then remembers the app and " +
+                    "Apps: the first time you fill an item in an app, Vaultesque asks, then remembers the app and " +
                         "the key it is signed with. An app claiming the same name with a different key gets nothing.",
                     style = MaterialTheme.typography.bodyMedium,
                 )

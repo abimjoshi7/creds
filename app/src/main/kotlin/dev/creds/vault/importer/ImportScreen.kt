@@ -217,7 +217,7 @@ private fun ImportRowView(index: Int, row: ImportRow, onToggle: () -> Unit) {
 /** What will not come across, in plain words. */
 internal fun warningLines(warnings: ImportWarnings): List<String> = buildList {
     if (warnings.encryptedHistorySkipped > 0) add("${warnings.encryptedHistorySkipped} previous values Enpass kept encrypted can't be imported.")
-    if (warnings.attachmentsSkipped > 0) add("${warnings.attachmentsSkipped} attachments are not imported; Creds does not store files.")
+    if (warnings.attachmentsSkipped > 0) add("${warnings.attachmentsSkipped} attachments are not imported; add them to their items afterwards.")
     if (warnings.deletedFieldsSkipped > 0) add("${warnings.deletedFieldsSkipped} deleted fields are left out.")
     if (warnings.unknownFieldTypes.isNotEmpty()) add("Unfamiliar field types (${warnings.unknownFieldTypes.joinToString()}) are imported as text.")
     if (warnings.unmappedTemplates.isNotEmpty()) add("Unfamiliar item types (${warnings.unmappedTemplates.joinToString()}) are imported as Other.")

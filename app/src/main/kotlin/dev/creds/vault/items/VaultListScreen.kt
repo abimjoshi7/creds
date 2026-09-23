@@ -551,7 +551,7 @@ fun VaultDrawerContent(
     )
 
     LazyColumn(contentPadding = PaddingValues(12.dp)) {
-        item { DrawerHeading("Creds") }
+        item { DrawerHeading("Vaultesque") }
 
         items(DrawerSmartLists) { list ->
             NavigationDrawerItem(

@@ -402,7 +402,7 @@ private fun AttachmentPreviewDialog(
                         .verticalScroll(rememberScrollState()),
                 )
                 is AttachmentPreview.Unsupported -> Text(
-                    "This kind of file can't be shown inside Creds. Save a copy to open it " +
+                    "This kind of file can't be shown inside Vaultesque. Save a copy to open it " +
                         "in another app.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

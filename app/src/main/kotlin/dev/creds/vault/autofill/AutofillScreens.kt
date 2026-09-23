@@ -117,10 +117,10 @@ fun AutofillPickerScreen(
             text = {
                 Text(
                     if (state.isWeb) {
-                        "Creds will remember ${state.originName} for this item and suggest it there from now on."
+                        "Vaultesque will remember ${state.originName} for this item and suggest it there from now on."
                     } else {
-                        "Creds will remember ${state.originName} for this item, identified by its signing key " +
-                            "${appFingerprint.orEmpty()}. If a different app ever claims to be it, Creds will not fill."
+                        "Vaultesque will remember ${state.originName} for this item, identified by its signing key " +
+                            "${appFingerprint.orEmpty()}. If a different app ever claims to be it, Vaultesque will not fill."
                     },
                 )
             },
@@ -237,7 +237,7 @@ fun AutofillSaveScreen(
             state.fingerprint?.let {
                 QuietPanel {
                     Text(
-                        "Creds will fill this login in ${state.originName} only while it is signed with key $it.",
+                        "Vaultesque will fill this login in ${state.originName} only while it is signed with key $it.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

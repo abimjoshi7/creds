@@ -1,4 +1,4 @@
-# Creds — Design Specification
+# Vaultesque — Design Specification
 
 Android password and credential manager. Local-only, zero-knowledge, offline-first.
 Structured so the domain layer can move to Kotlin Multiplatform if iOS happens.
@@ -261,7 +261,11 @@ Each checkpoint is independently buildable and reviewed before the next begins.
 
 Raise any of these and they change.
 
-- Application ID `dev.creds.vault`, app name **Creds**
+- Application ID `com.abimatwork.vaultesque`, app name **Vaultesque**, matching the
+  `com.abimatwork.*` family (erpesque, invensque). "Creds" was the working name: Kotlin
+  packages stay `dev.creds.vault.*` and internal classes keep the `Creds` prefix, since
+  neither is visible to users. Builds before the rename used `dev.creds.vault`, which
+  Android treats as a different app; its vault does not carry over on its own
 - Hilt for DI; single Activity; Navigation Compose; Material 3 with dynamic color on 31+
 - `com.lambdapioneer.argon2kt:argon2kt` 1.6.0 for Argon2id (JNI, no NDK build required)
 - `net.zetetic:sqlcipher-android` 4.18.0 with Room 2.8.4
@@ -333,12 +337,12 @@ Raise any of these and they change.
   signatures only), minus non-browsers, debug builds, and `com.android.browser`, whose
   listed key is the public AOSP test key. A browser off the list is treated as an app
 - Apps are never matched by name or by website. The first fill in an app goes through
-  "Search Creds…", which asks before remembering the app's package and signing key;
+  "Search Vaultesque…", which asks before remembering the app's package and signing key;
   saving a login from an app counts as that confirmation. A rotated key keeps trust only
   through the platform-verified signing lineage
 - Payment cards and identities are offered on any card or address form, since they are
   not tied to a site; they still fill only when chosen
-- Creds declares launcher apps visible (`<queries>`) so it can read the signing key of
+- Vaultesque declares launcher apps visible (`<queries>`) so it can read the signing key of
   the app being filled, rather than requesting `QUERY_ALL_PACKAGES`
 - PIN-type fields and new-password fields are never filled; a new password is what gets
   offered for saving
@@ -346,7 +350,7 @@ Raise any of these and they change.
 - The Enpass import keeps every field, empty template slots and section headings included,
   in Enpass order; deleted fields, attachments, icons and history Enpass stored encrypted
   are left out, and the preview says so before anything is written
-- Imported sensitivity is only raised (Enpass does not mark TOTP seeds sensitive; Creds
+- Imported sensitivity is only raised (Enpass does not mark TOTP seeds sensitive; Vaultesque
   does), and subtitles are recomputed from non-sensitive fields rather than taken from
   the file
 - Enpass's "other" templates in any category import as Other; bank accounts keep their
