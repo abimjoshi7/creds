@@ -20,6 +20,11 @@ data class VaultItem(
     val updatedAt: Long,
     val fields: List<VaultField> = emptyList(),
     val tags: List<Tag> = emptyList(),
+    /**
+     * Metadata of the item's files. Ignored when saving: files are added and removed
+     * through explicit attachment changes, because their bytes do not live in this object.
+     */
+    val attachments: List<Attachment> = emptyList(),
 ) {
     fun firstOfType(type: FieldType): VaultField? =
         fields.firstOrNull { !it.deleted && it.type == type }

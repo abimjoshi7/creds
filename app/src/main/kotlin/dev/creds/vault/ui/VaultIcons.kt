@@ -3,6 +3,7 @@ package dev.creds.vault.ui
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Delete
@@ -28,6 +29,7 @@ val Template.icon: ImageVector
         Template.CARD -> Icons.Outlined.CreditCard
         Template.BANK_ACCOUNT -> Icons.Outlined.AccountBalance
         Template.NOTE -> Icons.Outlined.Description
+        Template.DOCUMENT -> Icons.Outlined.AttachFile
         Template.WIFI -> Icons.Outlined.Wifi
         Template.IDENTITY -> Icons.Outlined.Badge
         Template.PASSPORT -> Icons.Outlined.TravelExplore

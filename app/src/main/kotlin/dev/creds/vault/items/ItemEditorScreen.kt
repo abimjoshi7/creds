@@ -1,6 +1,9 @@
 package dev.creds.vault.items
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.StarOutline
@@ -33,6 +37,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.creds.vault.core.domain.template.TemplateCatalog
+import dev.creds.vault.core.model.Attachment
 import dev.creds.vault.core.model.FieldType
 import dev.creds.vault.core.ui.theme.SecretTextStyle
 import dev.creds.vault.generator.GeneratorSheet
@@ -82,6 +89,7 @@ fun ItemEditorRoute(
     viewModel: ItemEditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val attachmentView by viewModel.attachmentView.collectAsStateWithLifecycle()
     var generatingFor by remember { mutableStateOf<String?>(null) }
 
     ItemEditorScreen(
@@ -96,8 +104,12 @@ fun ItemEditorRoute(
             onRemoveField = viewModel::removeField,
             onGenerate = { generatingFor = it },
             onSave = { viewModel.save(onSaved) },
+            onAddAttachment = viewModel::addAttachment,
+            onRemoveAttachment = viewModel::removeAttachment,
         ),
         modifier = modifier,
+        attachmentView = attachmentView,
+        attachmentActions = viewModel.attachmentActions,
     )
 
     generatingFor?.let { key ->
@@ -123,6 +135,8 @@ data class ItemEditorActions(
     /** Opens the generator for a password field. */
     val onGenerate: (key: String) -> Unit = {},
     val onSave: () -> Unit = {},
+    val onAddAttachment: (Uri) -> Unit = {},
+    val onRemoveAttachment: (id: String) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -131,8 +145,15 @@ fun ItemEditorScreen(
     state: ItemEditorUiState,
     actions: ItemEditorActions,
     modifier: Modifier = Modifier,
+    attachmentView: AttachmentViewState = AttachmentViewState(),
+    attachmentActions: AttachmentViewActions = AttachmentViewActions(),
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Any type can be attached; the size cap is enforced when the file is read.
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(actions.onAddAttachment)
+    }
     var addingField by remember { mutableStateOf(false) }
 
     // Both the toolbar arrow and system back go through here, so neither can drop edits.
@@ -142,6 +163,7 @@ fun ItemEditorScreen(
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -253,6 +275,33 @@ fun ItemEditorScreen(
                     Text("Add field", modifier = Modifier.padding(start = 8.dp))
                 }
 
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Attachments", style = MaterialTheme.typography.titleSmall)
+                    state.attachments.forEach { row ->
+                        AttachmentListRow(
+                            row = row,
+                            onPreview = { attachmentActions.onPreview(row) },
+                            onExport = { attachmentActions.onRequestExport(row) },
+                            onRemove = { actions.onRemoveAttachment(row.id) },
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { pickFile.launch(arrayOf("*/*")) },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AttachmentTags.ADD),
+                    ) {
+                        Icon(Icons.Outlined.AttachFile, contentDescription = null)
+                        Text("Add file", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    Text(
+                        "Up to ${Attachment.MAX_BYTES / (1024 * 1024)} MB each, encrypted in the vault.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
                 OutlinedTextField(
                     value = state.note,
                     onValueChange = actions.onNoteChange,
@@ -309,6 +358,8 @@ fun ItemEditorScreen(
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
         )
     }
+
+    AttachmentDialogs(attachmentView, attachmentActions, snackbarHostState)
 
     if (addingField) {
         AddFieldDialog(

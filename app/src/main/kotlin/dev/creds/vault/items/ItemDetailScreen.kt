@@ -109,6 +109,7 @@ fun ItemDetailRoute(
     viewModel: ItemDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val attachmentView by viewModel.attachmentView.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val copySensitive = rememberCopySensitive()
@@ -149,6 +150,8 @@ fun ItemDetailRoute(
         ),
         snackbarHostState = snackbar,
         modifier = modifier,
+        attachmentView = attachmentView,
+        attachmentActions = viewModel.attachmentActions,
     )
 
     val item = state.item
@@ -190,6 +193,8 @@ fun ItemDetailScreen(
     actions: ItemDetailActions,
     modifier: Modifier = Modifier,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    attachmentView: AttachmentViewState = AttachmentViewState(),
+    attachmentActions: AttachmentViewActions = AttachmentViewActions(),
 ) {
     val item = state.item
     var confirmPurge by remember { mutableStateOf(false) }
@@ -232,6 +237,7 @@ fun ItemDetailScreen(
                 historyCounts = state.historyCounts,
                 associations = state.associations,
                 actions = actions,
+                attachmentActions = attachmentActions,
                 contentPadding = padding,
             )
         }
@@ -240,6 +246,8 @@ fun ItemDetailScreen(
     state.history?.let { history ->
         FieldHistoryDialog(state = history, onCopy = actions.onCopy, onDismiss = actions.onDismissHistory)
     }
+
+    AttachmentDialogs(attachmentView, attachmentActions, snackbarHostState)
 
     if (confirmPurge && item != null) {
         ConfirmDialog(
@@ -330,9 +338,11 @@ private fun ItemDetailContent(
     historyCounts: Map<Long, Int>,
     associations: List<ItemAssociation>,
     actions: ItemDetailActions,
+    attachmentActions: AttachmentViewActions,
     contentPadding: PaddingValues,
 ) {
     val rows = remember(item) { item.detailRows() }
+    val attachments = remember(item) { item.attachments.map(AttachmentRow::from) }
     val dateFormat = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
 
     LazyColumn(
@@ -453,6 +463,24 @@ private fun ItemDetailContent(
                         modifier = Modifier.testTag(ItemDetailTags.NOTE),
                     )
                 }
+            }
+        }
+
+        if (attachments.isNotEmpty()) {
+            item(key = "attachments-heading") {
+                Text(
+                    "Attachments",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            items(attachments, key = { "attachment:${it.id}" }) { row ->
+                AttachmentListRow(
+                    row = row,
+                    onPreview = { attachmentActions.onPreview(row) },
+                    onExport = { attachmentActions.onRequestExport(row) },
+                )
             }
         }
 

@@ -165,4 +165,42 @@ class FieldCipherTest {
         assertThat(cipher.reuseHmac(vaultKey, FieldType.CARD_TXN_PASSWORD, "abcd")).isNotNull()
         assertThat(cipher.reuseHmac(vaultKey, FieldType.PIN, "0000")).isNotNull()
     }
+
+    @Test
+    fun `seals and opens attachment bytes`() {
+        val bytes = "%PDF-scan".toByteArray()
+        val sealed = cipher.sealAttachment(vaultKey, uuid, ATTACHMENT, bytes)
+
+        assertThat(sealed.decodeToString().contains("%PDF-scan")).isEqualTo(false)
+        assertThat(cipher.openAttachment(vaultKey, uuid, ATTACHMENT, sealed).decodeToString())
+            .isEqualTo("%PDF-scan")
+    }
+
+    @Test
+    fun `attachment bytes are bound to their id and their item`() {
+        val sealed = cipher.sealAttachment(vaultKey, uuid, ATTACHMENT, byteArrayOf(1, 2, 3))
+
+        // A file renamed on disk to another attachment's id must not open.
+        assertThrows<GeneralSecurityException> {
+            cipher.openAttachment(vaultKey, uuid, OTHER_ATTACHMENT, sealed)
+        }
+        assertThrows<GeneralSecurityException> {
+            cipher.openAttachment(vaultKey, "22222222-2222-2222-2222-222222222222", ATTACHMENT, sealed)
+        }
+    }
+
+    @Test
+    fun `an attachment name cannot stand in for its bytes`() {
+        val name = cipher.sealAttachmentName(vaultKey, uuid, ATTACHMENT, "passport.jpg")
+
+        assertThat(cipher.openAttachmentName(vaultKey, uuid, ATTACHMENT, name)).isEqualTo("passport.jpg")
+        assertThrows<GeneralSecurityException> {
+            cipher.openAttachment(vaultKey, uuid, ATTACHMENT, name)
+        }
+    }
+
+    private companion object {
+        const val ATTACHMENT = "aaaaaaaa-0000-4000-8000-000000000001"
+        const val OTHER_ATTACHMENT = "bbbbbbbb-0000-4000-8000-000000000002"
+    }
 }

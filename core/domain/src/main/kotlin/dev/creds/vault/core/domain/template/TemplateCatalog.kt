@@ -97,6 +97,13 @@ object TemplateCatalog {
             subtitleTypes = emptyList(),
         ),
         TemplateSpec(
+            template = Template.DOCUMENT,
+            displayName = "Document",
+            // A document is its attachments; the note describes them.
+            fields = emptyList(),
+            subtitleTypes = emptyList(),
+        ),
+        TemplateSpec(
             template = Template.WIFI,
             displayName = "Wi-Fi",
             fields = listOf(

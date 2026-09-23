@@ -47,6 +47,7 @@ data class EditorSnapshot(
     val note: String,
     val favorite: Boolean,
     val fields: List<EditableField>,
+    val attachments: List<AttachmentRow> = emptyList(),
 )
 
 /**

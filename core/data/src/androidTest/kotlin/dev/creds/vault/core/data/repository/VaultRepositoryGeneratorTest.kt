@@ -3,6 +3,7 @@ package dev.creds.vault.core.data.repository
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.creds.vault.core.crypto.VaultKey
+import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
 import dev.creds.vault.core.data.db.VaultDatabaseFactory
@@ -16,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /** The generator's recent-values list, against SQLCipher on a device. */
 @RunWith(AndroidJUnit4::class)
@@ -30,7 +32,7 @@ class VaultRepositoryGeneratorTest {
     fun setUp() {
         context.deleteDatabase(CredsDatabase.NAME)
         database = VaultDatabaseFactory(context).open(vaultKey)
-        repository = VaultRepository(database, FieldCipher())
+        repository = VaultRepository(database, FieldCipher(), AttachmentStore(File(context.cacheDir, "test-attachments")))
     }
 
     @After

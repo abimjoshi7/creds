@@ -3,11 +3,13 @@ package dev.creds.vault.core.data.repository
 import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import dev.creds.vault.core.crypto.VaultKey
+import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
 import dev.creds.vault.core.data.db.dao.AuditSql
 import dev.creds.vault.core.data.db.dao.SearchQuery
 import dev.creds.vault.core.data.db.dao.VaultQuery
+import dev.creds.vault.core.data.db.entity.AttachmentEntity
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
 import dev.creds.vault.core.data.db.entity.GeneratedValueEntity
@@ -23,6 +25,7 @@ import dev.creds.vault.core.domain.tag.TagNameCheck
 import dev.creds.vault.core.domain.tag.TagNames
 import dev.creds.vault.core.domain.template.TemplateCatalog
 import dev.creds.vault.core.model.AssociationKind
+import dev.creds.vault.core.model.Attachment
 import dev.creds.vault.core.model.FieldHistoryEntry
 import dev.creds.vault.core.model.ItemAssociation
 import dev.creds.vault.core.model.GeneratedValue
@@ -32,10 +35,13 @@ import dev.creds.vault.core.model.VaultField
 import dev.creds.vault.core.model.VaultFilter
 import dev.creds.vault.core.model.VaultItem
 import dev.creds.vault.core.model.VaultItemSummary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 /**
  * The module's write path.
@@ -51,6 +57,7 @@ import kotlinx.coroutines.flow.map
 class VaultRepository internal constructor(
     private val database: CredsDatabase,
     private val fieldCipher: FieldCipher,
+    private val attachmentStore: AttachmentStore,
 ) {
 
     private val itemDao = database.itemDao()
@@ -61,6 +68,7 @@ class VaultRepository internal constructor(
     private val generatorHistoryDao = database.generatorHistoryDao()
     private val auditDao = database.auditDao()
     private val associationDao = database.associationDao()
+    private val attachmentDao = database.attachmentDao()
 
     /** The vault audit, over the same open database. */
     val audit: AuditRepository = AuditRepository(database, fieldCipher)
@@ -71,57 +79,91 @@ class VaultRepository internal constructor(
      * Existing field uids are preserved so field history stays attached. When a
      * sensitive value changes, the previous ciphertext is recorded before the row is
      * overwritten — that is the whole point of history ("the new password does not work").
+     *
+     * [attachments] are applied in the same transaction. New files are sealed and written
+     * to disk *before* it and removed files deleted only *after* it commits, so a crash at
+     * any point leaves at worst an unreferenced file, which the next unlock sweeps away.
      */
-    suspend fun save(vaultKey: VaultKey, item: VaultItem, tags: List<Tag> = item.tags) {
-        database.withTransaction {
-            itemDao.upsert(item.toEntity(vaultKey))
+    suspend fun save(
+        vaultKey: VaultKey,
+        item: VaultItem,
+        tags: List<Tag> = item.tags,
+        attachments: AttachmentChanges = AttachmentChanges.NONE,
+    ) {
+        val written = mutableListOf<String>()
+        val removed = mutableListOf<String>()
+        try {
+            val newRows = withContext(Dispatchers.IO) {
+                attachments.added.map { new ->
+                    writeAttachment(vaultKey, item.uuid, new, item.updatedAt)
+                        .also { written += new.id }
+                }
+            }
+            database.withTransaction {
+                saveRows(vaultKey, item, tags)
+                newRows.forEach { attachmentDao.insert(it) }
+                attachments.removedIds.forEach { id ->
+                    // Scoped to this item, so a stray id cannot remove another item's file.
+                    if (attachmentDao.markDeleted(item.uuid, id, item.updatedAt) > 0) removed += id
+                }
+            }
+        } catch (e: Throwable) {
+            withContext(Dispatchers.IO + NonCancellable) {
+                written.forEach(attachmentStore::delete)
+            }
+            throw e
+        }
+        deleteAttachmentFiles(removed)
+    }
 
-            val existing = fieldDao.forItemAll(item.uuid).associateBy { it.uid }
-            val incoming = item.fields.filter { it.type.isValueBearing || it.value.isEmpty() }
-            val keptUids = mutableSetOf<Long>()
+    private suspend fun saveRows(vaultKey: VaultKey, item: VaultItem, tags: List<Tag>) {
+        itemDao.upsert(item.toEntity(vaultKey))
 
-            for (field in incoming) {
-                if (field.uid != 0L) {
-                    keptUids += field.uid
-                    val previous = existing[field.uid]
-                    if (previous != null &&
-                        !previous.deleted &&
-                        previous.sensitive &&
-                        previous.valueEnc != null
-                    ) {
-                        val previousValue = fieldCipher.openValue(
-                            vaultKey,
-                            item.uuid,
-                            previous.type,
-                            previous.valueEnc,
+        val existing = fieldDao.forItemAll(item.uuid).associateBy { it.uid }
+        val incoming = item.fields.filter { it.type.isValueBearing || it.value.isEmpty() }
+        val keptUids = mutableSetOf<Long>()
+
+        for (field in incoming) {
+            if (field.uid != 0L) {
+                keptUids += field.uid
+                val previous = existing[field.uid]
+                if (previous != null &&
+                    !previous.deleted &&
+                    previous.sensitive &&
+                    previous.valueEnc != null
+                ) {
+                    val previousValue = fieldCipher.openValue(
+                        vaultKey,
+                        item.uuid,
+                        previous.type,
+                        previous.valueEnc,
+                    )
+                    if (previousValue.isNotEmpty() && previousValue != field.value) {
+                        fieldHistoryDao.insert(
+                            FieldHistoryEntity(
+                                fieldUid = field.uid,
+                                valueEnc = previous.valueEnc,
+                                replacedAt = item.updatedAt,
+                            ),
                         )
-                        if (previousValue.isNotEmpty() && previousValue != field.value) {
-                            fieldHistoryDao.insert(
-                                FieldHistoryEntity(
-                                    fieldUid = field.uid,
-                                    valueEnc = previous.valueEnc,
-                                    replacedAt = item.updatedAt,
-                                ),
-                            )
-                        }
                     }
                 }
-
-                val uid = fieldDao.upsert(field.toEntity(vaultKey, item.uuid))
-                if (field.uid == 0L) keptUids += uid else keptUids += field.uid
             }
 
-            existing.values
-                .filter { !it.deleted && it.uid !in keptUids }
-                .forEach { fieldDao.markDeleted(it.uid, item.updatedAt) }
-
-            tagDao.unlinkAll(item.uuid)
-            if (tags.isNotEmpty()) {
-                tagDao.link(tags.map { ItemTagCrossRef(item.uuid, it.id) })
-            }
-
-            reindex(item)
+            val uid = fieldDao.upsert(field.toEntity(vaultKey, item.uuid))
+            if (field.uid == 0L) keptUids += uid else keptUids += field.uid
         }
+
+        existing.values
+            .filter { !it.deleted && it.uid !in keptUids }
+            .forEach { fieldDao.markDeleted(it.uid, item.updatedAt) }
+
+        tagDao.unlinkAll(item.uuid)
+        if (tags.isNotEmpty()) {
+            tagDao.link(tags.map { ItemTagCrossRef(item.uuid, it.id) })
+        }
+
+        reindex(item)
     }
 
     /** Reads an item back in plaintext. Null when it does not exist. */
@@ -129,7 +171,23 @@ class VaultRepository internal constructor(
         val entity = itemDao.byUuid(uuid) ?: return null
         val fields = fieldDao.forItem(uuid)
         val tags = tagDao.forItem(uuid)
-        return entity.toModel(vaultKey, fields, tags)
+        val attachments = attachmentDao.forItem(uuid)
+        return entity.toModel(vaultKey, fields, tags, attachments)
+    }
+
+    /**
+     * Decrypts one attachment's bytes, or null when it does not exist on [itemUuid] or
+     * its file has gone missing.
+     *
+     * The caller owns the returned array and should wipe it once the preview or export
+     * that needed it is finished.
+     */
+    suspend fun openAttachment(vaultKey: VaultKey, itemUuid: String, attachmentId: String): ByteArray? {
+        val row = attachmentDao.byId(attachmentId)?.takeIf { it.itemUuid == itemUuid } ?: return null
+        return withContext(Dispatchers.IO) {
+            val sealed = attachmentStore.read(row.id) ?: return@withContext null
+            fieldCipher.openAttachment(vaultKey, itemUuid, row.id, sealed)
+        }
     }
 
     /**
@@ -197,12 +255,15 @@ class VaultRepository internal constructor(
         }
     }
 
-    /** Hard delete. Cascades to fields, history, tags, associations and scores. */
+    /** Hard delete. Cascades to fields, history, tags, associations, scores and attachments. */
     suspend fun purge(uuid: String) {
-        database.withTransaction {
+        val files = database.withTransaction {
+            val files = attachmentDao.liveIdsForItems(listOf(uuid))
             searchDao.deleteFor(uuid)
             itemDao.purge(uuid)
+            files
         }
+        deleteAttachmentFiles(files)
     }
 
     /**
@@ -285,13 +346,54 @@ class VaultRepository internal constructor(
         itemDao.setArchived(uuid, archived, now)
 
     /** Hard-deletes everything in the trash, in one transaction. Returns how many. */
-    suspend fun emptyTrash(): Int = database.withTransaction {
-        val uuids = itemDao.trashedUuids()
-        uuids.forEach { uuid ->
-            searchDao.deleteFor(uuid)
-            itemDao.purge(uuid)
+    suspend fun emptyTrash(): Int {
+        val (count, files) = database.withTransaction {
+            val uuids = itemDao.trashedUuids()
+            val files = if (uuids.isEmpty()) emptyList() else attachmentDao.liveIdsForItems(uuids)
+            uuids.forEach { uuid ->
+                searchDao.deleteFor(uuid)
+                itemDao.purge(uuid)
+            }
+            uuids.size to files
         }
-        uuids.size
+        deleteAttachmentFiles(files)
+        return count
+    }
+
+    /**
+     * Deletes attachment files no live row refers to.
+     *
+     * Run once per unlock, before anything else can write, so a file sealed for a save
+     * that has not committed yet can never be mistaken for an orphan.
+     */
+    internal suspend fun sweepAttachments(): Int {
+        val live = attachmentDao.liveIds().toSet()
+        return withContext(Dispatchers.IO) { attachmentStore.sweep(live) }
+    }
+
+    /** After the rows are gone, never before: a row without its file is data loss. */
+    private suspend fun deleteAttachmentFiles(ids: List<String>) {
+        if (ids.isEmpty()) return
+        withContext(Dispatchers.IO) { ids.forEach(attachmentStore::delete) }
+    }
+
+    private fun writeAttachment(
+        vaultKey: VaultKey,
+        itemUuid: String,
+        new: NewAttachment,
+        now: Long,
+    ): AttachmentEntity {
+        require(new.bytes.size <= Attachment.MAX_BYTES) { "File is larger than the vault allows" }
+        attachmentStore.write(new.id, fieldCipher.sealAttachment(vaultKey, itemUuid, new.id, new.bytes))
+        return AttachmentEntity(
+            id = new.id,
+            itemUuid = itemUuid,
+            nameEnc = fieldCipher.sealAttachmentName(vaultKey, itemUuid, new.id, new.name),
+            mimeType = new.mimeType,
+            size = new.bytes.size.toLong(),
+            createdAt = new.createdAt,
+            updatedAt = now,
+        )
     }
 
     /**
@@ -606,6 +708,7 @@ class VaultRepository internal constructor(
         vaultKey: VaultKey,
         fields: List<FieldEntity>,
         tags: List<TagEntity>,
+        attachments: List<AttachmentEntity> = emptyList(),
     ) = VaultItem(
         uuid = uuid,
         template = template,
@@ -620,6 +723,15 @@ class VaultRepository internal constructor(
         updatedAt = updatedAt,
         fields = fields.map { it.toModel(vaultKey) },
         tags = tags.map { it.toModel() },
+        attachments = attachments.map { it.toModel(vaultKey) },
+    )
+
+    private fun AttachmentEntity.toModel(vaultKey: VaultKey) = Attachment(
+        id = id,
+        name = fieldCipher.openAttachmentName(vaultKey, itemUuid, id, nameEnc),
+        mimeType = mimeType,
+        size = size,
+        createdAt = createdAt,
     )
 
     private fun FieldEntity.toModel(vaultKey: VaultKey) = VaultField(

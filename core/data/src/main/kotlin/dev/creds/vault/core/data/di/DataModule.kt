@@ -9,10 +9,12 @@ import dagger.hilt.components.SingletonComponent
 import dev.creds.vault.core.crypto.BiometricKeyStore
 import dev.creds.vault.core.crypto.VaultKeySealer
 import dev.creds.vault.core.crypto.VaultSession
+import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.db.VaultDatabaseFactory
 import dev.creds.vault.core.data.prefs.LockPreferences
 import dev.creds.vault.core.data.prefs.VaultKeyStore
 import dev.creds.vault.core.data.vault.VaultManager
+import java.io.File
 import javax.inject.Singleton
 
 /**
@@ -34,6 +36,16 @@ internal object DataModule {
     ): VaultDatabaseFactory = VaultDatabaseFactory(context)
 
     /**
+     * `noBackupFilesDir` rather than `filesDir`: `allowBackup` is already off, and this
+     * keeps the files out of any backup even if that setting ever regresses.
+     */
+    @Provides
+    @Singleton
+    fun provideAttachmentStore(
+        @ApplicationContext context: Context,
+    ): AttachmentStore = AttachmentStore(File(context.noBackupFilesDir, AttachmentStore.DIRECTORY_NAME))
+
+    /**
      * Built here because `VaultManager` is public but takes `internal` collaborators,
      * which a public `@Inject` constructor is not allowed to name. This module is
      * already `internal`, so it can see all of them.
@@ -47,6 +59,7 @@ internal object DataModule {
         session: VaultSession,
         databaseFactory: VaultDatabaseFactory,
         biometricKeyStore: BiometricKeyStore,
+        attachmentStore: AttachmentStore,
     ): VaultManager = VaultManager(
         keyStore = keyStore,
         lockPreferences = lockPreferences,
@@ -54,5 +67,6 @@ internal object DataModule {
         session = session,
         databaseFactory = databaseFactory,
         biometricKeyStore = biometricKeyStore,
+        attachmentStore = attachmentStore,
     )
 }

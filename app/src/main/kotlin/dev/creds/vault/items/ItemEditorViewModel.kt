@@ -1,5 +1,6 @@
 package dev.creds.vault.items
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,9 +8,13 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.creds.vault.ItemEditorDestination
 import dev.creds.vault.core.crypto.VaultKey
+import dev.creds.vault.core.crypto.wipe
+import dev.creds.vault.core.data.repository.AttachmentChanges
+import dev.creds.vault.core.data.repository.NewAttachment
 import dev.creds.vault.core.data.repository.VaultRepository
 import dev.creds.vault.core.data.vault.VaultManager
 import dev.creds.vault.core.domain.template.TemplateCatalog
+import dev.creds.vault.core.model.Attachment
 import dev.creds.vault.core.model.Template
 import dev.creds.vault.core.model.VaultItem
 import kotlinx.coroutines.CancellationException
@@ -27,12 +32,14 @@ import javax.inject.Inject
  * The draft is plaintext, so it follows the vault's lifetime rather than the screen's: a
  * lock wipes it, and the next unlock reads the item afresh. Unsaved edits are lost to a
  * lock by design — the ViewModel outlives the lock on the back stack, and a draft that
- * survived would be secrets held in memory while the vault claims to be closed.
+ * survived would be secrets held in memory while the vault claims to be closed. Files
+ * picked but not yet saved are plaintext too, and are wiped by the same lock.
  */
 @HiltViewModel
 class ItemEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val vaultManager: VaultManager,
+    private val attachmentFiles: AttachmentFiles,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<ItemEditorDestination>()
@@ -44,10 +51,27 @@ class ItemEditorViewModel @Inject constructor(
     private var savedUuid: String? = route.uuid
     private var nextAddedKey = 0
 
+    // Picked files wait here, in plaintext, until the item is saved. Held outside the UI
+    // state so no state copy or log line ever carries the bytes.
+    private val pendingAttachments = linkedMapOf<String, NewAttachment>()
+
+    private val attachmentViewer = AttachmentViewer(viewModelScope, attachmentFiles) { row ->
+        pendingAttachments[row.id]?.bytes?.copyOf()
+            ?: savedUuid?.let { uuid ->
+                vaultManager.withUnlocked { repository, vaultKey -> repository.openAttachment(vaultKey, uuid, row.id) }
+            }
+    }
+
+    /** Preview and export of this item's files, saved or still pending. */
+    val attachmentView: StateFlow<AttachmentViewState> = attachmentViewer.state
+    val attachmentActions: AttachmentViewActions = AttachmentViewActions.of(attachmentViewer)
+
     init {
         viewModelScope.launch {
             vaultManager.repository.collect { repository ->
                 if (repository == null) {
+                    discardPendingAttachments()
+                    attachmentViewer.clear()
                     _state.value = ItemEditorUiState(loading = true)
                 } else if (_state.value.loading) {
                     load()
@@ -88,6 +112,7 @@ class ItemEditorViewModel @Inject constructor(
                 .filter { !it.deleted }
                 .sortedBy { it.order }
                 .map { EditableField.from(it) },
+            attachments = item.attachments.map(AttachmentRow::from),
         ).withBaseline()
     }
 
@@ -117,6 +142,48 @@ class ItemEditorViewModel @Inject constructor(
         state.copy(fields = state.fields.filterNot { it.key == key })
     }
 
+    fun addAttachment(uri: Uri) {
+        viewModelScope.launch {
+            when (val picked = attachmentFiles.read(uri)) {
+                PickedFile.TooLarge -> attachmentViewer.showMessage(
+                    "Files over ${Attachment.MAX_BYTES / (1024 * 1024)} MB can't be stored",
+                )
+                PickedFile.Unreadable -> attachmentViewer.showMessage("Could not read that file")
+                is PickedFile.Read -> {
+                    // A lock while the file was being read wiped the draft; keep nothing.
+                    if (!vaultManager.isUnlocked || _state.value.loading) {
+                        picked.bytes.wipe()
+                        return@launch
+                    }
+                    val new = NewAttachment(
+                        id = UUID.randomUUID().toString(),
+                        name = picked.name,
+                        mimeType = picked.mimeType,
+                        bytes = picked.bytes,
+                        createdAt = System.currentTimeMillis(),
+                    )
+                    pendingAttachments[new.id] = new
+                    _state.update { it.copy(attachments = it.attachments + AttachmentRow.pending(new)) }
+                }
+            }
+        }
+    }
+
+    /** Takes effect on save, like every other edit; until then a saved file is untouched. */
+    fun removeAttachment(id: String) {
+        pendingAttachments.remove(id)?.bytes?.wipe()
+        _state.update { state -> state.copy(attachments = state.attachments.filterNot { it.id == id }) }
+    }
+
+    private fun discardPendingAttachments() {
+        pendingAttachments.values.forEach { it.bytes.wipe() }
+        pendingAttachments.clear()
+    }
+
+    override fun onCleared() {
+        discardPendingAttachments()
+    }
+
     /** [onSaved] receives the item's uuid, which a new item only has once saved. */
     fun save(onSaved: (uuid: String) -> Unit) {
         val current = _state.value
@@ -135,6 +202,7 @@ class ItemEditorViewModel @Inject constructor(
                 }
                 if (uuid != null) {
                     savedUuid = uuid
+                    discardPendingAttachments()
                     // Re-read rather than keep the draft: new fields only have uids once
                     // stored, and a second save of uid-0 rows would duplicate them.
                     load()
@@ -164,9 +232,17 @@ class ItemEditorViewModel @Inject constructor(
         // stored now. Saving must never quietly untag, unarchive or restore an item.
         val stored = repository.load(vaultKey, uuid)
 
+        val kept = current.attachments.mapTo(HashSet()) { it.id }
+        val attachments = AttachmentChanges(
+            added = current.attachments.mapNotNull { pendingAttachments[it.id] },
+            removedIds = current.baseline?.attachments.orEmpty()
+                .filter { !it.pending && it.id !in kept }
+                .mapTo(HashSet()) { it.id },
+        )
+
         repository.save(
-            vaultKey,
-            VaultItem(
+            vaultKey = vaultKey,
+            item = VaultItem(
                 uuid = uuid,
                 template = current.template,
                 title = title,
@@ -181,6 +257,7 @@ class ItemEditorViewModel @Inject constructor(
                 fields = fields,
                 tags = stored?.tags.orEmpty(),
             ),
+            attachments = attachments,
         )
         return uuid
     }
@@ -196,13 +273,15 @@ data class ItemEditorUiState(
     val note: String = "",
     val favorite: Boolean = false,
     val fields: List<EditableField> = emptyList(),
+    /** Saved files still on the item, then files picked since, in the order shown. */
+    val attachments: List<AttachmentRow> = emptyList(),
     val error: String? = null,
     /** The draft as loaded or last saved; null until there is one. */
     val baseline: EditorSnapshot? = null,
 ) {
     val canSave: Boolean get() = !busy && !loading && !missing && title.isNotBlank()
 
-    val snapshot: EditorSnapshot get() = EditorSnapshot(title, note, favorite, fields)
+    val snapshot: EditorSnapshot get() = EditorSnapshot(title, note, favorite, fields, attachments)
 
     /** Whether leaving now would throw away something the user typed. */
     val isDirty: Boolean get() = baseline != null && snapshot != baseline

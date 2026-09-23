@@ -61,10 +61,21 @@ item_tags(item_uuid, tag_id)                       -- many-to-many
 
 item_associations(item_uuid, kind, value, cert_sha256, confirmed_at)
 audit_scores(field_uid PK, score, guesses_log10, checked_at)
+
+attachments(id PK, item_uuid FK, name_enc, mime_type, size,
+            created_at, updated_at, deleted)       -- bytes live outside the database
 ```
 
-Templates are built-in and fixed (login, card, bank account, note, wifi, identity,
-passport, server, misc). They decide which fields the editor renders — what the item *is*.
+Any item can carry file attachments. Each file is sealed with the item's field key
+(AES-256-GCM, AAD `uuid|attachment|id`) and written to `noBackupFilesDir/attachments/<id>`;
+the row holds only metadata, with the file name sealed like a note. Files are written
+before their row commits and deleted after it is gone, so a crash can only leave an
+unreferenced file, which is swept on the next unlock. Removing an attachment keeps a
+tombstone row but destroys the bytes. The table arrived in schema version 4, by an
+automatic migration that adds it and touches nothing else.
+
+Templates are built-in and fixed (login, card, bank account, note, document, wifi,
+identity, passport, server, misc). They decide which fields the editor renders — what the item *is*.
 
 Tags are user-created, free-form, many-to-many — where the user *filed* it.
 The two are orthogonal: renaming a tag never touches item structure.
@@ -350,3 +361,10 @@ Raise any of these and they change.
   the preview is dropped when the import finishes, is cancelled, or the vault locks
 - CSV import and `.vault` / `.json` / `.csv` export from §11 are not in any build
   checkpoint and remain unbuilt
+- Attachments: at most 5 MB each, any type. Images and text preview in-app from memory;
+  every other type can only leave as an explicit "Save a copy" to a user-chosen location,
+  after a plaintext warning. No "open with" — handing a file to another app would need a
+  plaintext file on disk. Attachment names are sealed and not searchable. The `.vault`
+  export must carry attachments when it is built; plaintext `.json`/`.csv` exports omit them
+- Files picked in the editor are held in memory, unencrypted, until the item is saved,
+  the same as field values being edited, and a lock discards them with the rest of the draft

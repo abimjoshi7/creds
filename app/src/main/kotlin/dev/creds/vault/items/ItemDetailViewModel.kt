@@ -46,9 +46,18 @@ import javax.inject.Inject
 class ItemDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val vaultManager: VaultManager,
+    attachmentFiles: AttachmentFiles,
 ) : ViewModel() {
 
     private val uuid = savedStateHandle.toRoute<ItemDetailDestination>().uuid
+
+    private val attachmentViewer = AttachmentViewer(viewModelScope, attachmentFiles) { row ->
+        vaultManager.withUnlocked { repository, vaultKey -> repository.openAttachment(vaultKey, uuid, row.id) }
+    }
+
+    /** Preview and export of this item's files. */
+    val attachmentView: StateFlow<AttachmentViewState> = attachmentViewer.state
+    val attachmentActions: AttachmentViewActions = AttachmentViewActions.of(attachmentViewer)
 
     private val history = MutableStateFlow<FieldHistoryState?>(null)
 
@@ -89,7 +98,12 @@ class ItemDetailViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            vaultManager.repository.collect { if (it == null) history.value = null }
+            vaultManager.repository.collect {
+                if (it == null) {
+                    history.value = null
+                    attachmentViewer.clear()
+                }
+            }
         }
     }
 

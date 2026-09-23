@@ -6,6 +6,7 @@ import dev.creds.vault.core.crypto.VaultKey
 import dev.creds.vault.core.crypto.VaultKeySealer
 import dev.creds.vault.core.crypto.VaultSession
 import dev.creds.vault.core.crypto.VaultState
+import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
 import dev.creds.vault.core.data.db.VaultDatabaseFactory
@@ -13,6 +14,7 @@ import dev.creds.vault.core.data.prefs.LockPreferences
 import dev.creds.vault.core.data.prefs.VaultKeyStore
 import dev.creds.vault.core.data.repository.VaultRepository
 import dev.creds.vault.core.domain.lock.UnlockBackoff
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +45,7 @@ class VaultManager internal constructor(
     private val session: VaultSession,
     private val databaseFactory: VaultDatabaseFactory,
     private val biometricKeyStore: BiometricKeyStore,
+    private val attachmentStore: AttachmentStore,
 ) {
 
     val state: Flow<VaultState> = session.state
@@ -198,7 +201,7 @@ class VaultManager internal constructor(
         return block(repository, unlocked.vaultKey)
     }
 
-    private fun openWith(vaultKey: VaultKey) {
+    private suspend fun openWith(vaultKey: VaultKey) {
         // Take ownership before opening: if the database throws, the session still holds
         // the key and lock() will wipe it, rather than it being stranded unreferenced.
         session.unlock(vaultKey)
@@ -208,7 +211,19 @@ class VaultManager internal constructor(
 
         val opened = databaseFactory.open(vaultKey)
         database = opened
-        _repository.value = VaultRepository(opened, FieldCipher())
+        val repository = VaultRepository(opened, FieldCipher(), attachmentStore)
+
+        // Before the repository is published, so no save can be mid-flight: a file it had
+        // written but not yet committed would otherwise look exactly like an orphan.
+        try {
+            repository.sweepAttachments()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Leftover ciphertext costs disk space, not secrecy. Never block an unlock on it.
+        }
+
+        _repository.value = repository
     }
 
     private suspend fun recordFailure(now: Long): UnlockResult {
@@ -236,6 +251,7 @@ class VaultManager internal constructor(
     private suspend fun wipe() {
         lock()
         databaseFactory.delete()
+        attachmentStore.deleteAll()
         keyStore.clearAll()
         biometricKeyStore.deleteKey()
     }

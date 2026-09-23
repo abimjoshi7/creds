@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.creds.vault.core.crypto.VaultKey
+import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.repository.VaultRepository
 import kotlinx.coroutines.runBlocking
@@ -17,6 +18,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /**
  * Schema migrations, against SQLCipher on a device.
@@ -86,6 +88,49 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate3To4KeepsItemsAndAddsAttachments() {
+        helper.createDatabase(CredsDatabase.NAME, 3).use { db ->
+            db.execSQL(
+                "INSERT INTO items (uuid, template, title, subtitle, favorite, archived, trashed, created_at, updated_at) " +
+                    "VALUES ('i', 'login', 'T', '', 0, 0, 0, 1, 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(CredsDatabase.NAME, 4, true).use { db ->
+            db.query("SELECT COUNT(*) FROM items").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+            db.query("SELECT COUNT(*) FROM attachments").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
+    /** The upgrade every existing install takes: a version-3 vault, opened for real. */
+    @Test
+    fun aVersion3VaultOpensThroughTheProductionPathWithItsItems() = runBlocking {
+        helper.createDatabase(CredsDatabase.NAME, 3).use { db ->
+            db.execSQL(FtsSchema.CREATE)
+            db.execSQL(
+                """
+                INSERT INTO items (uuid, template, title, subtitle, favorite, archived, trashed, created_at, updated_at)
+                VALUES ('kept', 'login', 'Survivor', '', 0, 0, 0, 1, 1)
+                """,
+            )
+        }
+
+        val database = VaultDatabaseFactory(context).open(vaultKey)
+        try {
+            assertNotNull(database.itemDao().byUuid("kept"))
+            assertTrue(database.attachmentDao().forItem("kept").isEmpty())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun aVersion1VaultOpensThroughTheProductionPathWithItsItems() = runBlocking {
         helper.createDatabase(CredsDatabase.NAME, 1).use { db ->
             // A real version-1 vault also has the FTS table its creation callback made.
@@ -101,7 +146,7 @@ class MigrationTest {
         val database = VaultDatabaseFactory(context).open(vaultKey)
         try {
             assertNotNull(database.itemDao().byUuid("kept"))
-            VaultRepository(database, FieldCipher()).recordGenerated(vaultKey, "fresh-value", now = 10)
+            VaultRepository(database, FieldCipher(), AttachmentStore(File(context.cacheDir, "test-attachments"))).recordGenerated(vaultKey, "fresh-value", now = 10)
             assertEquals(1, database.generatorHistoryDao().all().size)
         } finally {
             database.close()

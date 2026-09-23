@@ -12,6 +12,7 @@ enum class Template(val id: String) {
     CARD("card"),
     BANK_ACCOUNT("bank_account"),
     NOTE("note"),
+    DOCUMENT("document"),
     WIFI("wifi"),
     IDENTITY("identity"),
     PASSPORT("passport"),

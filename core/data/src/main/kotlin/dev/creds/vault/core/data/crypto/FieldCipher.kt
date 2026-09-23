@@ -64,6 +64,34 @@ internal class FieldCipher @Inject constructor() {
         }
 
     /**
+     * Seals an attachment's bytes.
+     *
+     * The item's key again, with the attachment id in the AAD: a sealed file renamed on
+     * disk to another attachment's id, or copied under another item, fails to open.
+     */
+    fun sealAttachment(vaultKey: VaultKey, itemUuid: String, attachmentId: String, bytes: ByteArray): ByteArray =
+        vaultKey.fieldKey(itemUuid).useAndWipe { key ->
+            AesGcm.seal(key, bytes, attachmentAad(itemUuid, attachmentId))
+        }
+
+    /** The caller owns the returned plaintext and should wipe it when done. */
+    fun openAttachment(vaultKey: VaultKey, itemUuid: String, attachmentId: String, sealed: ByteArray): ByteArray =
+        vaultKey.fieldKey(itemUuid).useAndWipe { key ->
+            AesGcm.open(key, sealed, attachmentAad(itemUuid, attachmentId))
+        }
+
+    /** File names get their own AAD, so a name cannot be swapped with the bytes it describes. */
+    fun sealAttachmentName(vaultKey: VaultKey, itemUuid: String, attachmentId: String, name: String): ByteArray =
+        vaultKey.fieldKey(itemUuid).useAndWipe { key ->
+            AesGcm.seal(key, name.toByteArray(Charsets.UTF_8), attachmentNameAad(itemUuid, attachmentId))
+        }
+
+    fun openAttachmentName(vaultKey: VaultKey, itemUuid: String, attachmentId: String, sealed: ByteArray): String =
+        vaultKey.fieldKey(itemUuid).useAndWipe { key ->
+            AesGcm.open(key, sealed, attachmentNameAad(itemUuid, attachmentId)).decodeToString()
+        }
+
+    /**
      * What goes in `search_text`.
      *
      * Null for sensitive fields — that is the single rule keeping secrets out of the FTS
@@ -118,6 +146,14 @@ internal class FieldCipher @Inject constructor() {
 
     private fun noteAad(itemUuid: String): ByteArray =
         "$itemUuid|note".toByteArray(Charsets.UTF_8)
+
+    // Field AADs are `uuid|typeId` with no further separator, so neither of these can
+    // collide with one.
+    private fun attachmentAad(itemUuid: String, attachmentId: String): ByteArray =
+        "$itemUuid|attachment|$attachmentId".toByteArray(Charsets.UTF_8)
+
+    private fun attachmentNameAad(itemUuid: String, attachmentId: String): ByteArray =
+        "$itemUuid|attachment-name|$attachmentId".toByteArray(Charsets.UTF_8)
 
     private companion object {
         const val HMAC = "HmacSHA256"

@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.creds.vault.core.data.db.dao.AssociationDao
+import dev.creds.vault.core.data.db.dao.AttachmentDao
 import dev.creds.vault.core.data.db.dao.AuditDao
 import dev.creds.vault.core.data.db.dao.FieldDao
 import dev.creds.vault.core.data.db.dao.FieldHistoryDao
@@ -13,6 +14,7 @@ import dev.creds.vault.core.data.db.dao.GeneratorHistoryDao
 import dev.creds.vault.core.data.db.dao.ItemDao
 import dev.creds.vault.core.data.db.dao.SearchDao
 import dev.creds.vault.core.data.db.dao.TagDao
+import dev.creds.vault.core.data.db.entity.AttachmentEntity
 import dev.creds.vault.core.data.db.entity.AuditScoreEntity
 import dev.creds.vault.core.data.db.entity.FieldEntity
 import dev.creds.vault.core.data.db.entity.FieldHistoryEntity
@@ -42,8 +44,9 @@ import dev.creds.vault.core.data.db.entity.TagEntity
         ItemAssociationEntity::class,
         AuditScoreEntity::class,
         GeneratedValueEntity::class,
+        AttachmentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
     autoMigrations = [
         // 2: generator_history. A new table only, which Room can derive from the two
@@ -52,6 +55,8 @@ import dev.creds.vault.core.data.db.entity.TagEntity
         // 3: breach columns on audit_scores, all defaulted or nullable. Existing scores
         // keep their values and read as "not breached, never checked online".
         AutoMigration(from = 2, to = 3),
+        // 4: the attachments table. New table only; file bytes live outside the database.
+        AutoMigration(from = 3, to = 4),
     ],
 )
 @TypeConverters(Converters::class)
@@ -65,6 +70,7 @@ internal abstract class CredsDatabase : RoomDatabase() {
     abstract fun auditDao(): AuditDao
     abstract fun associationDao(): AssociationDao
     abstract fun generatorHistoryDao(): GeneratorHistoryDao
+    abstract fun attachmentDao(): AttachmentDao
 
     companion object {
         const val NAME: String = "creds.db"
