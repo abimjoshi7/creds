@@ -6,7 +6,6 @@ versionCode 2 (1.0.0). Recheck them whenever networking, permissions or SDKs cha
 ## Privacy policy
 
 https://github.com/abimjoshi7/creds/blob/main/docs/play/privacy-policy.md
-(Fill in DEVELOPER_NAME and CONTACT_EMAIL in that file first.)
 
 ## App access
 

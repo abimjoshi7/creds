@@ -2,8 +2,8 @@
 
 Effective 25 September 2026.
 
-Vaultesque is an offline password manager for Android, published by DEVELOPER_NAME
-(contact: CONTACT_EMAIL). This policy covers the Vaultesque app,
+Vaultesque is an offline password manager for Android, published by Abim Joshi
+(contact: abimjoshi7@gmail.com). This policy covers the Vaultesque app,
 package `com.abimatwork.vaultesque`.
 
 ## The short version
@@ -79,4 +79,4 @@ effective date.
 
 ## Contact
 
-CONTACT_EMAIL
+abimjoshi7@gmail.com
