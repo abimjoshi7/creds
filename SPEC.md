@@ -401,3 +401,10 @@ Raise any of these and they change.
   export carries attachments; plaintext `.json`/`.csv` exports, when built, will omit them
 - Files picked in the editor are held in memory, unencrypted, until the item is saved,
   the same as field values being edited, and a lock discards them with the rest of the draft
+- Changing the master password reseals the same vault key, so nothing is re-encrypted and
+  biometric unlock keeps working. The new password meets the setup floor (10 characters,
+  zxcvbn ≥ 2). A wrong current password there counts toward neither the unlock backoff nor
+  the erase-after-failures counter: the user is already inside
+- Play release: versionCode 2 / 1.0.0 is the first store build. Play App Signing must use
+  the existing `creds-release.jks` as the app signing key so Play updates can replace the
+  sideloaded install (see `docs/play/README.md`)
