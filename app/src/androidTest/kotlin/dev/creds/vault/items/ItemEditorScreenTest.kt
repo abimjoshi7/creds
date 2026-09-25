@@ -1,5 +1,8 @@
 package dev.creds.vault.items
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -54,9 +57,9 @@ class ItemEditorScreenTest {
     fun secretsAreObscuredUntilRevealed() {
         setContent(loaded)
 
-        compose.onAllNodesWithText("correct-horse").assertCountEquals(0)
+        compose.onAllNodes(drawsText("correct-horse")).assertCountEquals(0)
         compose.onNodeWithTag(ItemEditorTags.reveal(password.key)).performClick()
-        compose.onNodeWithText("correct-horse").assertIsDisplayed()
+        compose.onNode(drawsText("correct-horse")).assertIsDisplayed()
         compose.onAllNodesWithTag(ItemEditorTags.reveal(username.key)).assertCountEquals(0)
     }
 
@@ -139,4 +142,14 @@ class ItemEditorScreenTest {
     private fun setContent(state: ItemEditorUiState, actions: ItemEditorActions = ItemEditorActions()) {
         compose.setContent { ItemEditorScreen(state = state, actions = actions) }
     }
+}
+
+/**
+ * Text as drawn: a label, or a text field's visible (transformed) value. Unlike
+ * `hasText`, it ignores a field's raw `InputText`, which Compose exposes even while
+ * the field shows only bullets.
+ */
+private fun drawsText(value: String) = SemanticsMatcher("draws \"$value\"") { node ->
+    node.config.getOrNull(SemanticsProperties.EditableText)?.text == value ||
+        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == value }
 }

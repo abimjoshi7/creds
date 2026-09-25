@@ -6,6 +6,8 @@ import dev.creds.vault.core.crypto.VaultKey
 import dev.creds.vault.core.crypto.VaultKeySealer
 import dev.creds.vault.core.crypto.VaultSession
 import dev.creds.vault.core.crypto.VaultState
+import dev.creds.vault.core.crypto.constantTimeEquals
+import dev.creds.vault.core.crypto.useAndWipe
 import dev.creds.vault.core.data.attachments.AttachmentStore
 import dev.creds.vault.core.data.crypto.FieldCipher
 import dev.creds.vault.core.data.db.CredsDatabase
@@ -153,6 +155,34 @@ class VaultManager internal constructor(
         lockPreferences.setBiometricUnlock(true)
     }
 
+    /**
+     * Replaces the master password. The vault key does not change, so nothing is
+     * re-encrypted and a biometric copy of the key keeps working.
+     *
+     * [current] is checked against the stored sealed key and must open the very key this
+     * session holds. Wrong guesses here do not feed the unlock backoff or the wipe
+     * counter: the user is already inside, and a typo in settings must never be what
+     * erases a vault. Argon2id's own cost still limits how fast guesses can go.
+     *
+     * Both arrays belong to the caller, who must wipe them. Slow; call off the main thread.
+     */
+    suspend fun changeMasterPassword(current: CharArray, new: CharArray): ChangePasswordResult {
+        val sealed = keyStore.sealedVaultKey() ?: return ChangePasswordResult.Locked
+        if (!session.isUnlocked) return ChangePasswordResult.Locked
+
+        val opened = sealer.open(sealed, current) ?: return ChangePasswordResult.WrongPassword
+        val matches = opened.use { candidate ->
+            candidate.exportForSealing().useAndWipe { a ->
+                session.withVaultKey { it.exportForSealing() }.useAndWipe { b -> constantTimeEquals(a, b) }
+            }
+        }
+        if (!matches) return ChangePasswordResult.WrongPassword
+
+        val resealed = session.withVaultKey { vaultKey -> sealer.reseal(vaultKey, new) }
+        keyStore.storeSealedVaultKey(resealed)
+        return ChangePasswordResult.Changed
+    }
+
     suspend fun disableBiometric() {
         keyStore.clearBiometricSealedKey()
         biometricKeyStore.deleteKey()
@@ -255,6 +285,17 @@ class VaultManager internal constructor(
         keyStore.clearAll()
         biometricKeyStore.deleteKey()
     }
+}
+
+/** The outcome of a master password change. */
+sealed interface ChangePasswordResult {
+    data object Changed : ChangePasswordResult
+
+    /** The current password was wrong. Nothing changed. */
+    data object WrongPassword : ChangePasswordResult
+
+    /** The vault locked, or no vault exists. Nothing changed. */
+    data object Locked : ChangePasswordResult
 }
 
 /** The outcome of an unlock attempt. */

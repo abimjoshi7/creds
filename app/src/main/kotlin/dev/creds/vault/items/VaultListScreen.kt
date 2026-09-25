@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Tag
@@ -156,6 +157,7 @@ data class VaultListActions(
     val onOpenAutofill: () -> Unit = {},
     val onImport: () -> Unit = {},
     val onExport: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
     val onOpenItem: (VaultItemSummary) -> Unit = {},
     val onAddItem: () -> Unit = {},
     val onAddSamples: (() -> Unit)? = null,
@@ -170,6 +172,7 @@ fun VaultListRoute(
     onOpenAutofill: () -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenItem: (String) -> Unit,
     onCreateItem: (Template) -> Unit,
     onLock: () -> Unit,
@@ -233,6 +236,7 @@ fun VaultListRoute(
             onOpenAutofill = onOpenAutofill,
             onImport = onImport,
             onExport = onExport,
+            onOpenSettings = onOpenSettings,
             onOpenItem = { onOpenItem(it.uuid) },
             onAddItem = { pickingTemplate = true },
             onAddSamples = viewModel::addSamples.takeIf { viewModel.canAddSamples },
@@ -332,6 +336,7 @@ fun VaultListScreen(
                     onOpenGenerator = actions.onOpenGenerator,
                     onImport = actions.onImport,
                     onExport = actions.onExport,
+                    onOpenSettings = actions.onOpenSettings,
                     onAddSamples = actions.onAddSamples,
                 )
             },
@@ -424,6 +429,7 @@ private fun SearchTopBar(
     onOpenGenerator: () -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit,
+    onOpenSettings: () -> Unit,
     onAddSamples: (() -> Unit)?,
 ) {
     var overflow by remember { mutableStateOf(false) }
@@ -523,6 +529,15 @@ private fun SearchTopBar(
                         onClick = {
                             overflow = false
                             onExport()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Settings") },
+                        modifier = Modifier.testTag(VaultListTags.menu("settings")),
+                        leadingIcon = { Icon(Icons.Outlined.Settings, null) },
+                        onClick = {
+                            overflow = false
+                            onOpenSettings()
                         },
                     )
                     DropdownMenuItem(
